@@ -1,0 +1,335 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- ================= DISABLE BASE.HTML VOICE ================= -->
+<script>
+  // Prevent base.html voice from running
+  window.DISABLE_BASE_VOICE = true;
+</script>
+
+<div class="p-6 space-y-6">
+
+  <!-- User Info & Balance -->
+  <div class="bg-white shadow-md rounded-2xl p-6 flex items-center justify-between">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-800" id="label-welcome">Welcome, {{ user.name }}</h2>
+      <p class="text-gray-600" id="label-email">{{ user.email }}</p>
+    </div>
+    <div class="text-right">
+      <p class="text-lg font-semibold text-gray-700" id="label-balance">Balance</p>
+      <p class="text-2xl font-bold text-green-600">
+        ₹{{ '%.2f'|format(account.balance if account else 0) }}
+      </p>
+    </div>
+  </div>
+
+  <!-- Quick Actions Section -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+    <!-- Deposit & Withdraw -->
+    <div class="bg-white shadow-md rounded-2xl p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-3" id="label-depositwithdraw">Deposit & Withdraw</h3>
+      <div class="flex flex-col space-y-3">
+        <a href="{{ url_for('deposit') }}"
+          class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600" id="label-deposit">Deposit</a>
+        <a href="{{ url_for('withdraw') }}"
+          class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600" id="label-withdraw">Withdraw</a>
+      </div>
+    </div>
+
+    <!-- KYC, Loan, Fixed Deposit -->
+    <div class="bg-white shadow-md rounded-2xl p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-3" id="label-forms">Forms</h3>
+      <div class="flex flex-col space-y-3">
+        <a href="{{ url_for('kyc_page') }}"
+          class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600" id="label-kyc">KYC</a>
+        <a href="{{ url_for('loan_form') }}"
+          class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600" id="label-loan">Loan Form</a>
+        <a href="{{ url_for('fixed_deposit') }}"
+          class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600" id="label-fd">Fixed Deposit</a>
+      </div>
+    </div>
+
+    <!-- Transactions -->
+    <div class="bg-white shadow-md rounded-2xl p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-3" id="label-transactions">Transactions</h3>
+      <a href="{{ url_for('transaction') }}"
+        class="px-4 py-2 bg-blue-500 text-white rounded-lg text-center hover:bg-blue-600 block" id="label-viewtransactions">Transactions</a>
+    </div>
+  </div>
+
+  <!-- Recent Transactions -->
+  <div class="bg-white shadow-md rounded-2xl p-6">
+    <h3 class="text-lg font-semibold text-gray-800 mb-4" id="label-recenttx">Recent Transactions</h3>
+    {% if txs %}
+    <ul class="divide-y divide-gray-200" id="recent-tx-list">
+      {% for txn in txs %}
+      <li class="py-2 flex justify-between items-center">
+        <div class="flex flex-col">
+          <span class="font-medium text-gray-700">{{ txn.type|capitalize }}</span>
+          <span class="text-gray-500 text-sm">{{ txn.ts }}</span>
+        </div>
+        <div class="text-right font-semibold text-gray-800">
+          ₹{{ '%.2f'|format(txn.amount) }}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-gray-500" id="label-notx">No recent transactions.</p>
+    {% endif %}
+  </div>
+
+  <!-- Digital Form -->
+  <div class="bg-white shadow-md rounded-2xl p-6">
+    <h3 class="text-lg font-semibold text-gray-800 mb-4" id="label-digital">Digital Form</h3>
+    <a href="{{ url_for('digital') }}"
+      class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600" id="label-godigital">
+      Go to Digital Form
+    </a>
+  </div>
+</div>
+
+<!-- ================= LABEL TRANSLATION ================= -->
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  let selectedLang = localStorage.getItem("lang") || "en";
+
+  const labels = {
+    "en": {
+      "welcome": "Welcome, {{ user.name }}",
+      "balance": "Balance",
+      "depositwithdraw": "Deposit & Withdraw",
+      "deposit": "Deposit",
+      "withdraw": "Withdraw",
+      "forms": "Forms",
+      "kyc": "KYC",
+      "loan": "Loan Form",
+      "fd": "Fixed Deposit",
+      "transactions": "Transactions",
+      "viewtransactions": "Transactions",
+      "recenttx": "Recent Transactions",
+      "notx": "No recent transactions.",
+      "digital": "Digital Form",
+      "godigital": "Go to Digital Form"
+    },
+    "hi": {
+      "welcome": "स्वागत है, {{ user.name }}",
+      "balance": "बैलेंस",
+      "depositwithdraw": "जमा और निकासी",
+      "deposit": "जमा",
+      "withdraw": "निकासी",
+      "forms": "फॉर्म्स",
+      "kyc": "केवाईसी",
+      "loan": "लोन फॉर्म",
+      "fd": "फिक्स्ड डिपॉजिट",
+      "transactions": "लेनदेन",
+      "viewtransactions": "लेनदेन",
+      "recenttx": "हाल की लेनदेन",
+      "notx": "कोई लेनदेन नहीं।",
+      "digital": "डिजिटल फॉर्म",
+      "godigital": "डिजिटल फॉर्म पर जाएँ"
+    },
+    "kn": {
+      "welcome": "ಸ್ವಾಗತ, {{ user.name }}",
+      "balance": "ಬ್ಯಾಲೆನ್ಸ್",
+      "depositwithdraw": "ಠೇವಣಿ ಮತ್ತು ತೆಗೆದುಹಾಕುವುದು",
+      "deposit": "ಠೇವಣಿ",
+      "withdraw": "ತೆಗೆದುಹಾಕುವುದು",
+      "forms": "ಫಾರ್ಮ್‌ಗಳು",
+      "kyc": "ಕೆವೈಸಿ",
+      "loan": "ಲೋನ್ ಫಾರ್ಮ್",
+      "fd": "ಫಿಕ್ಸ್ಡ್ ಡೆಪಾಸಿಟ್",
+      "transactions": "ವಹಿವಾಟು",
+      "viewtransactions": "ವಹಿವಾಟುಗಳು",
+      "recenttx": "ಇತ್ತೀಚಿನ ವಹಿವಾಟುಗಳು",
+      "notx": "ಯಾವುದೇ ವಹಿವಾಟುಗಳಿಲ್ಲ.",
+      "digital": "ಡಿಜಿಟಲ್ ಫಾರ್ಮ್",
+      "godigital": "ಡಿಜಿಟಲ್ ಫಾರ್ಮ್‌ಗೆ ಹೋಗಿ"
+    }
+  };
+
+  function setLabels() {
+    const elements = [
+      "label-welcome",
+      "label-balance",
+      "label-depositwithdraw",
+      "label-deposit",
+      "label-withdraw",
+      "label-forms",
+      "label-kyc",
+      "label-loan",
+      "label-fd",
+      "label-transactions",
+      "label-viewtransactions",
+      "label-recenttx",
+      "label-digital",
+      "label-godigital",
+      "label-notx"
+    ];
+    elements.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && labels[selectedLang][id.replace("label-","")]) {
+        el.innerText = labels[selectedLang][id.replace("label-","")];
+      }
+    });
+  }
+
+  setLabels();
+});
+</script>
+
+<!-- ================= DASHBOARD-SPECIFIC VOICE ================= -->
+<script>
+let recorder;
+let chunks = [];
+let voiceStarted = false; // ensure voice runs only once
+
+async function speak(text, lang = localStorage.getItem("lang") || "en") {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, lang })
+  });
+  const data = await res.json();
+  if (!data.audio) return;
+  await new Promise(resolve => {
+    const audio = new Audio(data.audio);
+    audio.onended = resolve;
+    audio.play();
+  });
+}
+
+function startRecording() {
+  if (voiceStarted) return; // prevent multiple triggers
+  voiceStarted = true;
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(() => recorder.stop(), 4000);
+    recorder.onstop = sendAudio;
+  });
+}
+
+async function sendAudio() {
+  const blob = new Blob(chunks, { type: "audio/webm" });
+  const fd = new FormData();
+  fd.append("audio", blob);
+
+  const res = await fetch("/stt", { method: "POST", body: fd });
+  const data = await res.json();
+  if (!data.text) {
+    retryAction();
+    startRecording();
+    return;
+  }
+
+  handleAction(data.text.toLowerCase());
+}
+function handleAction(text) {
+  text = text.toLowerCase();
+
+  // ===== DEPOSIT =====
+  const depositKeywords = [
+    "deposit","add money","credit","जमा","जमा करें","पैसे जमा करें","जमा करना",
+    "ಹಣ ಸೇರಿಸಿ","hana serisi","thevani","thevenin","Avani","Devani","tevani","tewani","ನಗದು ಸೇರಿಸಿ","ಹಣ ಡಿಪಾಸಿಟ್"
+  ];
+  if(depositKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('deposit') }}"; 
+    return; 
+  }
+
+  // ===== WITHDRAW =====
+  const withdrawKeywords = [
+    "withdraw","take out money","cash out","निकासी","निकालें","पैसे निकालें","नकद निकालें",
+    "ಹಣ ತೆಗೆದುಕೊ","hana tegeduko","ನಗದು ತೆಗೆದುಕೊ","ಹಣ ತೆಗೆಯಿರಿ"
+  ];
+  if(withdrawKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('withdraw') }}"; 
+    return; 
+  }
+
+  // ===== KYC =====
+  const kycKeywords = [
+    "kyc","know your customer","केवाईसी","केवाईसी करें","ग्राहक पहचान",
+    "KYC","ಕೆವೈಸಿ","ಗ್ರಾಹಕ ಪರಿಚಯ","ಕೆವೈಸಿ ಪ್ರಕ್ರಿಯೆ","ಕಸ್ಟಮರ್ ಐಡೆಂಟಿಟಿ"
+  ];
+  if(kycKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('kyc_page') }}"; 
+    return; 
+  }
+
+  // ===== LOAN =====
+  const loanKeywords = [
+    "loan","apply loan","personal loan","home loan","लोन","ऋण","लोन आवेदन","लोन के लिए आवेदन करें",
+    "ಲೋನ್","ಲೋನ್ ಅರ್ಜಿ","ಹೋಮ್ ಲೋನ್","ಪರ್ಸನಲ್ ಲೋನ್"
+  ];
+  if(loanKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('loan_form') }}"; 
+    return; 
+  }
+
+  // ===== FIXED DEPOSIT =====
+  const fdKeywords = [
+    "fixed deposit","fd","fixed","फिक्स्ड डिपॉजिट","फिक्स्ड","स्थिर जमा","एफ़डी",
+    "ಫಿಕ್ಸ್ಡ್ ಡಿಪಾಸಿಟ್","ಫಿಕ್ಸ್ಡ್","ಸ್ಥಿರ ಠೇವಣಿ","ಫಿಕ್ಸ್ಡ್ ಡಿಪಾಸಿಟ್ ಮಾಡಿ"
+  ];
+  if(fdKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('fixed_deposit') }}"; 
+    return; 
+  }
+
+  // ===== TRANSACTIONS =====
+const transactionKeywords = [
+  "transactions","history","account history","lenden",
+  "ವಹಿವಾಟು","ಖಾತೆ ಇತಿಹಾಸ","ಖಾತೆ ವ್ಯವಹಾರ","ವ್ಯವಹಾರ ಇತಿಹಾಸ",
+  "vahi vatu","vahi watu","vahi vah","vaiva","vahi vat"
+];
+if(transactionKeywords.some(k=>text.includes(k))){ 
+  window.location.href = "{{ url_for('transaction') }}"; 
+  return; 
+}
+  // ===== DIGITAL FORM =====
+  const digitalFormKeywords = [
+    "digital form","form","online form","डिजिटल फॉर्म","फॉर्म","ऑनलाइन फॉर्म",
+    "ಡಿಜಿಟಲ್ ಫಾರ್ಮ್","ಫಾರ್ಮ್","ಆನ್‌ಲೈನ್ ಫಾರ್ಮ್","ಡಿಜಿಟಲ್ ಫಾರ್ಮ್ ಮಾಡಿ"
+  ];
+  if(digitalFormKeywords.some(k=>text.includes(k))){ 
+    window.location.href = "{{ url_for('digital') }}"; 
+    return; 
+  }
+
+  // ===== RETRY IF NO MATCH =====
+  retryAction();
+}
+
+async function retryAction() {
+  const lang = localStorage.getItem("lang") || "en";
+  let message = "";
+
+  if (lang === "en") {
+    message = "Say deposit, withdraw, KYC, loan, fd, transactions or digital form";
+  } 
+  else if (lang === "hi") {
+    message = "deposit, withdraw, KYC कहें, लोन कहें, Fd कहें, लेनदेन कहें या डिजिटल फॉर्म कहें";
+  } 
+  else { // Kannada easy spoken commands
+    message = "deposit, withdraw, KYC, ಲೋನ್, FD, ವಹಿವಾಟು ಅಥವಾ ಡಿಜಿಟಲ್ ಫಾರ್ಮ್ ಹೇಳಿ";
+  }
+
+  await speak(message, lang);
+  voiceStarted = false;
+  startRecording();
+}
+
+/* AUTO START DASHBOARD VOICE ONCE */
+document.addEventListener("DOMContentLoaded", () => {
+  if (!voiceStarted) startRecording();
+});
+</script>
+
+{% endblock %}

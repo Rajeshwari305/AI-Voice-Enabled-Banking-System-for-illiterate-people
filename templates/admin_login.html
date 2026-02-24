@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="max-w-md mx-auto bg-white/90 p-6 rounded shadow-md mt-10">
+  <h2 class="text-2xl font-bold text-center mb-6 text-blue-700" id="page-title">
+    Admin Login
+  </h2>
+
+  <form method="POST" action="{{ url_for('admin_login') }}" id="admin-form">
+    <!-- Email Field -->
+    <div class="mb-4">
+      <label class="block text-gray-700 font-semibold mb-2" id="label-email">Email</label>
+      <input type="email" name="email" id="email" class="w-full p-2 border rounded text-black">
+    </div>
+
+    <!-- Password Field -->
+    <div class="mb-4">
+      <label class="block text-gray-700 font-semibold mb-2" id="label-password">Password</label>
+      <input type="password" name="password" id="password" maxlength="4" class="w-full p-2 border rounded text-black">
+    </div>
+
+    <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded" id="btn-login">
+      Login
+    </button>
+  </form>
+</div>
+
+<script>
+/* ---------------- VARIABLES ---------------- */
+let formStage = "EMAIL";
+let recorder, chunks = [];
+let isProcessing = false;
+let filling = false;
+let confirming = false;
+let pendingValue = "";
+let voiceStarted = false;
+
+// Default language
+if (!window.selectedLang) window.selectedLang = localStorage.getItem("lang") || "en";
+
+/* ---------------- TRANSLATION ---------------- */
+const pageTextMap = {
+  "page-title": { en: "Admin Login", hi: "एडमिन लॉगिन", kn: "ನಿರ್ವಹಣಾಧಿಕಾರಿ ಲಾಗಿನ್" },
+  "label-email": { en: "Email", hi: "ईमेल", kn: "ಇಮೇಲ್" },
+  "label-password": { en: "Password", hi: "पासवर्ड", kn: "ಪಾಸ್‌ವರ್ಡ್" },
+  "btn-login": { en: "Login", hi: "लॉगिन", kn: "ಲಾಗಿನ್" }
+};
+
+function translatePage() {
+  for (const id in pageTextMap) {
+    const elem = document.getElementById(id);
+    if (elem && pageTextMap[id][window.selectedLang]) {
+      elem.innerText = pageTextMap[id][window.selectedLang];
+    }
+  }
+}
+
+translatePage();
+
+/* ---------------- DIGIT MAP ---------------- */
+const digitMap = {
+  en: { "zero":"0","one":"1","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8","nine":"9" ,"1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9","0":"0"},
+  hi: { "एक":"1","ek":"1","दो":"2","do":"2","तीन":"3","teen":"3","चार":"4","char":"4","पाँच":"5","paanch":"5","छह":"6","chhah":"6","सात":"7","saat":"7","आठ":"8","aath":"8","नौ":"9","nau":"9" },
+  kn: {
+    "ಒಂದು":"1","ಎರಡು":"2","ಮೂರು":"3","ನಾಲ್ಕು":"4","ಐದು":"5","ಆರು":"6","ಏಳು":"7","ಎಂಟು":"8","ಒಂಬತ್ತು":"9","ಸುನ್ನೆ":"0",
+    "ondu":"1","vandu":"1","eradu":"2","mooru":"3","nalku":"4","aidu":"5","Idu":"5","aaru":"6","aru":"6","elu":"7","entu":"8","ombattu":"9","sunne":"0"
+  }
+};
+
+function wordsToDigits(text){
+  if(!text) return "";
+  text = text.toLowerCase().replace(/[^\w\s]/g,'');
+  const map = digitMap[window.selectedLang] || digitMap["en"];
+  let digits = [];
+  text.split(/\s+/).forEach(w => { if(map[w]!==undefined) digits.push(map[w]); });
+  return digits.join("").slice(0,4);
+}
+
+/* ---------------- TTS FUNCTION ---------------- */
+async function speak(text) {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text, lang: window.selectedLang })
+  });
+  const data = await res.json();
+  if(!data.audio) return;
+  await new Promise(r => { const a=new Audio(data.audio); a.onended=r; a.play(); });
+}
+
+/* ---------------- VOICE FIELD FLOW ---------------- */
+async function askField() {
+  if(isProcessing || filling || confirming) return;
+
+  const msg = formStage==="EMAIL" ?
+    (window.selectedLang==="hi"?"कृपया अपना ईमेल धीरे से बोलें":
+     window.selectedLang==="kn"?"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇಮೇಲ್ ನಿಧಾನವಾಗಿ ಹೇಳಿ":
+     "Please say your email slowly") :
+    (window.selectedLang==="hi"?"कृपया अपना पासवर्ड धीरे से बोलें":
+     window.selectedLang==="kn"?"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪಾಸ್‌ವರ್ಡ್ ನಿಧಾನವಾಗಿ ಹೇಳಿ":
+     "Please say your password slowly");
+
+  await speak(msg);
+  startListening();
+}
+
+function startListening() {
+  if(isProcessing || filling) return;
+  isProcessing = true;
+
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(()=>recorder.stop(), 8000);
+    recorder.onstop = processAudio;
+  });
+}
+
+async function processAudio() {
+  const blob = new Blob(chunks,{type:"audio/webm"});
+  const fd = new FormData();
+  fd.append("audio", blob);
+
+  const res = await fetch("/stt", { method: "POST", body: fd });
+  const data = await res.json();
+  let text = data.text?.trim();
+  isProcessing = false;
+
+  if(!text){ await speakRetry(); askField(); return; }
+
+  if(confirming) handleConfirmation(text);
+  else { pendingValue = text; askConfirmation(); }
+}
+
+async function askConfirmation() {
+  confirming = true;
+  let spokenValue = pendingValue;
+  if(formStage==="EMAIL") spokenValue = spokenValue.replace(/at/g," at ").replace(/dot/g," dot");
+  else if(formStage==="PASSWORD") spokenValue = wordsToDigits(spokenValue);
+
+  const msg = window.selectedLang==="hi" ? `आपने ${spokenValue} कहा है। क्या यह सही है? हाँ या नहीं बोलें` :
+              window.selectedLang==="kn" ? `ನೀವು ${spokenValue} ಎಂದು ಹೇಳಿದ್ದೀರಿ. ಇದು ಸರಿಯೇ? ಹೌದು ಅಥವಾ ಇಲ್ಲ ಹೇಳಿ` :
+              `You said ${spokenValue}. Is this correct? Say yes or no`;
+
+  await speak(msg);
+  startListening();
+}
+
+async function handleConfirmation(text) {
+  confirming = false;
+  text = text.toLowerCase().trim();
+
+  const yes = ["yes","yeah","yep","ok","sure","हाँ","ha","ಹೌದು","how do"];
+  const no  = ["no","nah","nahi","नहीं","ಇಲ್ಲ","illa"];
+
+  if(yes.some(o => text.includes(o))) finalizeField(pendingValue);
+  else if(no.some(o => text.includes(o))) { await speakRetry(); askField(); }
+  else { await speakRetry(); askConfirmation(); }
+}
+
+async function finalizeField(text) {
+  filling = true;
+
+  if(formStage==="EMAIL"){
+    document.getElementById("email").value = text.replace(/\s+/g,"").replace(/at/g,"@").replace(/dot/g,".");
+    formStage = "PASSWORD";
+    filling = false;
+    askField();
+    return;
+  }
+
+  document.getElementById("password").value = wordsToDigits(text);
+  await speak(
+    window.selectedLang==="hi"?"लॉगिन सफल हुआ है। अब सबमिट किया जा रहा है":
+    window.selectedLang==="kn"?"ಲಾಗಿನ್ ಯಶಸ್ವಿಯಾಗಿದೆ. ಈಗ ಸಲ್ಲಿಸಲಾಗುತ್ತಿದೆ":
+    "Login successful. Submitting now"
+  );
+
+  document.getElementById("admin-form").submit();
+}
+
+async function speakRetry() {
+  await speak(
+    window.selectedLang==="hi"?"मुझे ठीक से सुनाई नहीं दिया। फिर से बोलें":
+    window.selectedLang==="kn"?"ನನಗೆ ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಹೇಳಿ":
+    "I did not hear clearly. Please repeat"
+  );
+}
+
+/* ---------------- AUTO START ---------------- */
+async function startVoiceOnce() {
+  if(voiceStarted) return;
+  voiceStarted = true;
+
+  await speak(
+    window.selectedLang==="hi"?"एडमिन लॉगिन पेज में आपका स्वागत है":
+    window.selectedLang==="kn"?"ನಿರ್ವಹಣಾಧಿಕಾರಿ ಲಾಗಿನ್ ಪುಟಕ್ಕೆ ಸ್ವಾಗತ":
+    "Welcome to admin login page"
+  );
+
+  translatePage();
+  askField();
+}
+
+document.addEventListener("click", startVoiceOnce, { once:true });
+document.addEventListener("keydown", startVoiceOnce, { once:true });
+
+/* ---------------- LANGUAGE OVERRIDE ---------------- */
+window.setLanguage = function(lang) {
+  window.selectedLang = lang;
+  localStorage.setItem("lang", lang);
+  translatePage();
+};
+</script>
+
+{% endblock %}

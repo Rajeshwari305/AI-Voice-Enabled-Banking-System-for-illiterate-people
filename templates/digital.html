@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white/90 text-black p-6">
+  <h2 class="text-2xl font-bold mb-4 text-black">Upload a Form Image</h2>
+
+  <form id="uploadForm" enctype="multipart/form-data" class="mb-4">
+    <input type="file" name="image" class="mb-2 p-1 border rounded" required />
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit</button>
+  </form>
+
+  <div id="formWrapper" class="relative w-full border border-gray-300">
+    <div id="formOutput"></div>
+  </div>
+</div>
+
+<!-- Restrict only voice from base.html -->
+<script>
+  // Set a global flag so base.html voice script won't run
+  window.DISABLE_BASE_VOICE = true;
+</script>
+
+<script>
+async function renderForm(fields, origW = 1000, origH = 1400) {
+  const wrapper = document.getElementById('formWrapper');
+  const wrapperW = wrapper.clientWidth;
+  const wrapperH = (origH / origW) * wrapperW;
+  wrapper.style.height = wrapperH + 'px';
+
+  const scaleX = wrapperW / origW;
+  const scaleY = wrapperH / origH;
+
+  const formContainer = document.getElementById('formOutput');
+  formContainer.innerHTML = '';
+
+  fields.forEach(field => {
+    const fieldEl = document.createElement('div');
+    fieldEl.className = 'form-element';
+    fieldEl.style.position = 'absolute';
+    fieldEl.style.left = `${field.x * scaleX}px`;
+    fieldEl.style.top = `${field.y * scaleY}px`;
+    fieldEl.style.width = `${field.width * scaleX}px`;
+    fieldEl.style.height = `${field.height * scaleY}px`;
+
+    if (field.type === "text") {
+      const label = document.createElement('label');
+      label.textContent = field.label;
+      label.className = 'form-label';
+      label.style.display = 'block';
+      label.style.marginBottom = '2px';
+      fieldEl.appendChild(label);
+
+    } else if (field.type === "input") {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'input';
+      input.style.width = '100%';
+      input.style.height = '100%';
+      input.style.boxSizing = 'border-box';
+      input.value = field.value || '';
+      fieldEl.appendChild(input);
+
+    } else if (field.type === "radio") {
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.className = 'radio';
+      radio.style.position = 'absolute';
+      radio.style.width = `${field.width * scaleX}px`;
+      radio.style.height = `${field.height * scaleY}px`;
+      radio.style.top = '50%';
+      radio.style.left = '50%';
+      radio.style.transform = 'translate(-50%, -50%)';
+      radio.checked = field.checked || false;
+      fieldEl.appendChild(radio);
+    }
+
+    formContainer.appendChild(fieldEl);
+  });
+}
+
+// Upload and render form
+document.getElementById('uploadForm').onsubmit = async function(e) {
+  e.preventDefault();
+  const formData = new FormData(this);
+  const fileInput = this.querySelector('input[name="image"]');
+  const imgFile = fileInput.files[0];
+  if (!imgFile) return;
+
+  const img = new Image();
+  img.src = URL.createObjectURL(imgFile);
+
+  img.onload = async function() {
+    const origW = img.naturalWidth;
+    const origH = img.naturalHeight;
+
+    const res = await fetch('{{ url_for("upload") }}', {
+      method: 'POST',
+      body: formData
+    });
+
+    const fields = await res.json();
+    renderForm(fields, origW, origH);
+    URL.revokeObjectURL(img.src);
+  };
+};
+
+// Print form
+document.getElementById('printBtn').onclick = function() {
+  const wrapper = document.getElementById('formWrapper');
+  const clone = wrapper.cloneNode(true);
+
+  clone.querySelectorAll('input').forEach(input => {
+    const span = document.createElement('span');
+    if(input.type === "radio") {
+      span.textContent = input.checked ? "●" : "○";
+      span.style.fontSize = '16px';
+    } else {
+      span.textContent = input.value;
+      span.style.border = '1px solid #000';
+      span.style.display = 'inline-block';
+      span.style.padding = '2px 4px';
+      span.style.width = input.offsetWidth + 'px';
+      span.style.height = input.offsetHeight + 'px';
+      span.style.boxSizing = 'border-box';
+      span.style.fontSize = '14px';
+      span.style.color = '#000';
+    }
+    input.parentNode.replaceChild(span, input);
+  });
+
+  const printWindow = window.open('', '', 'height=800,width=1000');
+  printWindow.document.write('<html><head><title>Print Form</title>');
+  printWindow.document.write('<style>body{font-family:sans-serif;color:#000}.form-label{color:#000;font-weight:bold}.form-element{position:absolute}</style>');
+  printWindow.document.write('</head><body>');
+  printWindow.document.write(clone.outerHTML);
+  printWindow.document.write('</body></html>');
+  printWindow.document.close();
+  printWindow.focus();
+  printWindow.print();
+};
+</script>
+{% endblock %}
+
+{% block extra_style %}
+<style>
+#formWrapper {
+  position: relative;
+  background-color: #fff;
+  overflow: hidden;
+}
+
+#formOutput {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.form-element {
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.form-label {
+  font-size: 14px;
+  color: #000;
+  background-color: #fff;
+  padding: 2px 4px;
+  display: inline-block;
+}
+
+.input {
+  border: 1px solid #000;
+  padding: 2px;
+  font-size: 14px;
+  box-sizing: border-box;
+  color: #000;
+}
+
+.radio {
+  accent-color: #000;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="min-h-screen flex items-center justify-center">
+  <div class="bg-white/20 backdrop-blur-md p-8 rounded-2xl shadow-lg w-full max-w-4xl border border-white/30">
+
+    <h2 id="loginTitle" class="text-2xl font-bold mb-6 text-center text-white">Login</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <!-- PASSWORD LOGIN -->
+      <div class="p-6 border rounded-lg shadow bg-white/70">
+        <h3 id="passwordTitle" class="font-semibold mb-2 text-lg text-gray-800">Password Login</h3>
+
+        <form id="passwordForm" method="post" action="{{ url_for('login') }}">
+          <label id="emailLabel" class="block font-medium text-gray-800">Email</label>
+          <input id="email" name="email" class="border p-2 w-full mb-3 rounded">
+
+          <label id="pinLabel" class="block font-medium text-gray-800">4-Digit PIN</label>
+          <input id="password" name="password" maxlength="4" class="border p-2 w-full mb-3 rounded">
+
+          <button id="loginBtn" class="bg-blue-600 text-white w-full py-2 rounded">Login</button>
+        </form>
+      </div>
+
+      <!-- FACE LOGIN -->
+      <div class="p-6 border rounded-lg shadow bg-white/70">
+        <h3 id="faceTitle" class="font-semibold mb-2 text-lg text-gray-800">Face Login</h3>
+
+        <form id="faceForm" method="post" action="{{ url_for('face_login') }}">
+          <label id="facePinLabel" class="block font-medium text-gray-800">4-Digit PIN</label>
+          <input id="face_password" name="password" maxlength="4" class="border p-2 w-full mb-3 rounded">
+
+          <video id="video" width="320" height="240" autoplay class="border mb-3 rounded"></video>
+          <canvas id="canvas" style="display:none;"></canvas>
+          <input type="hidden" id="faceInput" name="face_image">
+
+          <button type="button" id="captureBtn" class="bg-green-600 text-white w-full py-2 rounded">
+            Capture & Login
+          </button>
+
+          <p id="status" class="text-sm text-center text-gray-700">
+            Align your face and say "capture"
+          </p>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedLang = localStorage.getItem("lang") || "en";
+
+/* ================= PAGE TRANSLATION ================= */
+const pageTextMap = {
+  loginTitle: { en:"Login", hi:"लॉगिन", kn:"ಲಾಗಿನ್" },
+  passwordTitle: { en:"Password Login", hi:"पासवर्ड लॉगिन", kn:"ಪಾಸ್ವರ್ಡ್ ಲಾಗಿನ್" },
+  emailLabel: { en:"Email", hi:"ईमेल", kn:"ಇಮೇಲ್" },
+  pinLabel: { en:"4-Digit PIN", hi:"4 अंकों का पिन", kn:"4 ಅಂಕಿಯ ಪಿನ್" },
+  loginBtn: { en:"Login", hi:"लॉगिन", kn:"ಲಾಗಿನ್" },
+  faceTitle: { en:"Face Login", hi:"फेस लॉगिन", kn:"ಮುಖ ಲಾಗಿನ್" },
+  facePinLabel: { en:"4-Digit PIN", hi:"4 अंकों का पिन", kn:"4 ಅಂಕಿಯ ಪಿನ್" },
+  captureBtn: { en:"Capture & Login", hi:"कैप्चर और लॉगिन", kn:"ಕ್ಯಾಪ್ಚರ್ ಮತ್ತು ಲಾಗಿನ್" },
+  status: {
+    en:'Align your face and say "capture"',
+    hi:'अपना चेहरा सही रखें और "कैप्चर" कहें',
+    kn:'ನಿಮ್ಮ ಮುಖವನ್ನು ಸರಿಯಾಗಿ ಇರಿಸಿ ಮತ್ತು "ಕ್ಯಾಪ್ಚರ್" ಹೇಳಿ'
+  }
+};
+Object.keys(pageTextMap).forEach(id=>{
+  const el = document.getElementById(id);
+  if(el && pageTextMap[id][selectedLang]) el.innerText = pageTextMap[id][selectedLang];
+});
+
+/* ================= TTS ================= */
+async function speak(text){
+  const res = await fetch("/tts",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text, lang:selectedLang})
+  });
+  const data = await res.json();
+  if(!data.audio) return;
+  const a = new Audio(data.audio); 
+  a.play();
+  await new Promise(r=>a.onended=r);
+}
+
+/* ================= DIGIT MAPPING FOR MULTI-LANGUAGE ================= */
+const digitMap = {
+  en: {"zero":"0","oh":"0","nought":"0","nil":"0","one":"1","won":"1","first":"1","two":"2","to":"2","too":"2","second":"2","three":"3","tree":"3","third":"3","four":"4","for":"4","fourth":"4","five":"5","fifth":"5","six":"6","sixth":"6","seven":"7","seventh":"7","eight":"8","ate":"8","eighth":"8","nine":"9","ninth":"9","nein":"9"},
+  hi: {"शून्य":"0","shunya":"0","sunya":"0","zero":"0","एक":"1","ek":"1","eka":"1","दो":"2","do":"2","dho":"2","तीन":"3","teen":"3","tin":"3","चार":"4","char":"4","chaar":"4","पाँच":"5","paanch":"5","panch":"5","छह":"6","chhah":"6","chha":"6","सात":"7","saat":"7","saath":"7","आठ":"8","aath":"8","aathh":"8","नौ":"9","nau":"9","nao":"9"},
+  kn: {"ಸುನ್ನೆ":"0","sunne":"0","shunne":"0","ಒಂದು":"1","ondu":"1","ondhu":"1","ಎರಡು":"2","eradu":"2","nanakku":"2","ಮೂರು":"3","mooru":"3","mooru3":"3","ನಾಲ್ಕು":"4","nalku":"4","naalku":"4","naale":"4","ಐದು":"5","aidu":"5","idu":"5","ಆರು":"6","aaru":"6","aru":"6","ಏಳು":"7","elu":"7","houdu":"7","haudu":"7","ಎಂಟು":"8","entu":"8","entu8":"8","ಒಂಬತ್ತು":"9","ombattu":"9","ombatu":"9"}
+};
+
+/* ================= CONVERT SPOKEN WORDS TO DIGITS ================= */
+function wordsToDigits(text){
+  if(!text) return "";
+
+  // Normalize text for ALL languages
+  text = text.toLowerCase().trim();
+
+  // Remove unwanted characters but keep Kannada / Hindi
+  text = text.replace(/[^\w\s\u0900-\u097F\u0C80-\u0CFF]/g,'');
+
+  const map = digitMap[selectedLang] || digitMap["en"];
+  let digits = [];
+
+  text.split(/\s+/).forEach(w=>{
+    // Remove filler words
+    if(["idhu","idu","this","hai","haa","haan"].includes(w)) return;
+
+    if(map[w] !== undefined){
+      digits.push(map[w]);
+    }
+    else if(!isNaN(w)){
+      digits.push(w);
+    }
+  });
+
+  return digits.join("").slice(0,4);
+}
+
+/* ================= VOICE LOGIN FLOW ================= */
+let stage="CHOOSE", chosenLogin="", pendingValue="", confirming=false, isProcessing=false;
+const yesKeywords = ["yes","yeah","yep","sure","ok","okay","affirmative","हां","हाँ","haan","hāṁ","haa"," han","हाँजी","how do","ಹೌದು"];
+const noKeywords  = ["no","nah","nope","not","ila","नहीं","nahin","nahi","illa","ಇಲ್ಲ"];
+
+/* ===== LISTEN ===== */
+function startListening(){
+  if(isProcessing) return;
+  isProcessing=true;
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    let recorder = new MediaRecorder(stream); let chunks=[];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(()=>recorder.stop(),9000);
+    recorder.onstop = () => processAudio(chunks);
+  });
+}
+
+/* ===== PROCESS AUDIO ===== */
+async function processAudio(chunks){
+  const blob = new Blob(chunks,{type:"audio/webm"});
+  const fd = new FormData(); fd.append("audio", blob);
+  const res = await fetch("/stt",{method:"POST", body:fd});
+  const data = await res.json();
+  isProcessing = false;
+
+  let text = data.text?.trim();
+  if(confirming){ await handleConfirmationResponse(text, stage); return; }
+  if(!text){ await speakRetry(); startListening(); return; }
+
+  if(stage==="CHOOSE"){
+    if(/face|facelogin|camera|फेस|चेहरा|ಫೇಸ್/i.test(text)){ 
+      chosenLogin="face"; stage="PIN";
+      await speak(selectedLang==="hi"?"कृपया अपने चार अंकों का पिन कहें":selectedLang==="kn"?"ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಾಲ್ಕು ಅಂಕಿಗಳ ಪಿನ್ ಹೇಳಿ":"Please say your four digit pin");
+      startListening(); return;
+    } else { 
+      chosenLogin="password"; stage="EMAIL";
+      await speak(selectedLang==="hi"?"कृपया अपना ईमेल कहें":selectedLang==="kn"?"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇಮೇಲ್ ಹೇಳಿ":"Please say your email");
+      startListening(); return;
+    }
+  }
+
+  if(stage==="EMAIL"){ pendingValue=text; confirming=false; await confirmField("EMAIL"); return; }
+  if(stage==="PIN"){ pendingValue=text; confirming=false; await confirmField("PIN"); return; }
+  if(stage==="FACE"){
+    if(/capture|click|photo|कैप्चर|ಫೋಟೋ/i.test(text)){ captureFace(); }
+    else { await speak(selectedLang==="hi"?'"कैप्चर" कहें':selectedLang==="kn"?'"ಕ್ಯಾಪ್ಚರ್" ಹೇಳಿ':'Say "capture"'); startListening(); }
+  }
+}
+
+/* ===== CONFIRMATION ===== */
+async function confirmField(field){
+  confirming=true;
+  let spokenValue = field==="EMAIL"? pendingValue.replace(/at/g," at ").replace(/dot/g," dot") : wordsToDigits(pendingValue);
+  const msg = selectedLang==="hi"?`आपने ${spokenValue} कहा है। क्या यह सही है? हाँ या नहीं बोलें`:
+              selectedLang==="kn"?`ನೀವು ${spokenValue} ಎಂದು ಹೇಳಿದ್ದೀರಿ. ಇದು ಸರಿಯೇ? ಹೌದು ಅಥವಾ ಇಲ್ಲ ಹೇಳಿ`:
+              `You said ${spokenValue}. Is this correct? Say yes or no`;
+  await speak(msg);
+  startListening();
+}
+
+async function handleConfirmationResponse(text, field){
+  text = text.toLowerCase();
+  if(yesKeywords.some(k=>text.includes(k))){ await finalizeField(field); }
+  else if(noKeywords.some(k => text.includes(k))){
+  // 🔴 FULL RESET
+  confirming = false;
+  pendingValue = "";
+  isProcessing = false;
+  stage = field;
+
+  await speak(
+    selectedLang === "hi" ? "ठीक है, फिर से पिन कहें" :
+    selectedLang === "kn" ? "ಸರಿ, ಮತ್ತೆ ಪಿನ್ ಹೇಳಿ" :
+    "Okay, please say your PIN again"
+  );
+
+  startListening();   // 🎤 mic WILL restart
+  return;
+}
+  else { await speakRetry(); await confirmField(field); }
+}
+
+/* ===== FINALIZE FIELD ===== */
+async function finalizeField(field){
+  confirming = false;
+
+  if(field === "EMAIL"){
+    // Clean up the email: remove spaces, replace spoken "at" and "dot"
+    let email = pendingValue.toLowerCase().replace(/\s+/g, "")
+                       .replace(/at/gi, "@")
+                       .replace(/dot/gi, ".");
+    const emailInput = document.getElementById("email");
+    if(emailInput) emailInput.value = email;  // <-- fill email
+    stage = "PIN"; 
+    pendingValue = "";
+
+    await speak(
+      selectedLang === "hi" ? "कृपया अपने चार अंकों का पिन कहें" :
+      selectedLang === "kn" ? "ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಾಲ್ಕು ಅಂಕಿಗಳ ಪಿನ್ ಹೇಳಿ" :
+      "Please say your four digit pin"
+    );
+    startListening();
+    return;
+  }
+
+  // Convert spoken PIN to digits, including Devanagari/Kannada
+  let pinValue = wordsToDigits(pendingValue);
+  const pinInput = document.getElementById(chosenLogin === "face" ? "face_password" : "password");
+  if(pinInput) pinInput.value = pinValue;  // <-- fill PIN
+  console.log("Filled PIN:", pinValue);
+
+  if(chosenLogin === "password"){
+    await speak(
+      selectedLang === "hi" ? "लॉगिन किया जा रहा है" :
+      selectedLang === "kn" ? "ಲಾಗಿನ್ ಆಗುತ್ತಿದೆ" :
+      "Logging in"
+    );
+    const form = document.getElementById("passwordForm");
+    if(form) form.submit();
+  } else {
+    stage = "FACE";
+    await speak(
+      selectedLang === "hi" ? 'अपने चेहरे को सही स्थिति में रखें और "कैप्चर" कहें' :
+      selectedLang === "kn" ? 'ನಿಮ್ಮ ಮುಖವನ್ನು ಸರಿಯಾಗಿ ಇರಿಸಿ ಮತ್ತು "ಕ್ಯಾಪ್ಚರ್" ಹೇಳಿ' :
+      'Align your face and say "capture"'
+    );
+    startListening();
+  }
+
+  pendingValue = "";
+}
+
+/* ================= FACE CAPTURE ================= */
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const faceInput = document.getElementById("faceInput");
+navigator.mediaDevices.getUserMedia({video:true}).then(s => video.srcObject = s);
+
+function captureFace(){
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video,0,0);
+  faceInput.value = JSON.stringify([canvas.toDataURL("image/jpeg")]);
+  document.getElementById("faceForm").submit();
+}
+document.getElementById("captureBtn").onclick = captureFace;
+
+/* ================= CLICK TO START ================= */
+document.addEventListener("click", async()=>{
+  await speak(selectedLang==="hi"?"कौन सा लॉगिन चाहिए? पासवर्ड या फेस":
+              selectedLang==="kn"?"ಯಾವ ಲಾಗಿನ್ ಬೇಕು? ಪಾಸ್ವರ್ಡ್ ಅಥವಾ ಮುಖ":
+              "Which login do you want? Password or Face");
+  startListening();
+},{once:true});
+
+async function speakRetry(){
+  await speak(selectedLang==="hi"?"मुझे ठीक से सुनाई नहीं दिया। फिर से बोलें":
+              selectedLang==="kn"?"ನನಗೆ ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಹೇಳಿ":
+              "I did not hear clearly. Please repeat");
+}
+</script>
+
+{% endblock %}

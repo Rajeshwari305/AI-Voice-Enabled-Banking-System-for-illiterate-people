@@ -1,0 +1,364 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="min-h-screen flex items-center justify-center">
+  <div class="bg-white/20 backdrop-blur-md p-8 rounded-2xl shadow-lg w-full max-w-md border border-white/30">
+    <h2 class="text-2xl font-bold mb-6 text-center text-white" id="page-title">Register</h2>
+
+    <form id="registerForm" method="post" class="space-y-4">
+
+      <div>
+        <label class="block font-medium text-white" id="label-name">Name</label>
+        <input id="name" name="name" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-email">Email</label>
+        <input id="email" name="email" type="email" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-password">4-Digit PIN</label>
+        <input id="password" name="password" type="password" pattern="\d{4}" maxlength="4" required
+          placeholder="Enter 4-digit PIN"
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-account">Account Number</label>
+        <input id="account_number" name="account_number" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-phone">Phone Number</label>
+        <input id="phone_number" name="phone_number" type="tel" pattern="[0-9]{10}" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-aadhaar">Aadhaar Number</label>
+        <input id="aadhaar_number" name="aadhaar_number" pattern="[0-9]{12}" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-nominee">Nominee</label>
+        <input id="nominee" name="nominee" required
+          class="w-full border border-white/40 rounded p-2 bg-transparent text-white placeholder-gray-200">
+      </div>
+
+      <div>
+        <label class="block font-medium text-white" id="label-role">Role</label>
+        <select id="role" name="role" class="w-full border border-white/40 rounded p-2 bg-transparent text-white">
+          <option value="user" class="text-black">User</option>
+          <option value="admin" class="text-black">Admin</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block font-medium text-white mb-1" id="label-face">Face Enrollment (Single Photo)</label>
+        <video id="video" width="100%" height="200" autoplay class="rounded border border-white/40"></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+
+        <button type="button" id="captureBtn"
+          class="mt-2 w-full bg-green-600 text-white p-2 rounded-lg hover:bg-green-700">
+          Capture Photo
+        </button>
+
+        <p id="status" class="text-white mt-2 text-sm">Capture a clear photo for login.</p>
+        <input type="hidden" id="face_images" name="face_images">
+      </div>
+
+      <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700"
+        disabled>
+        Create Account
+      </button>
+    </form>
+
+    <script>
+      let selectedLang = localStorage.getItem("lang") || "en";
+      let recorder, chunks = [], isProcessing = false;
+      let confirming = false, pendingValue = "", index = 0, faceStage = false, voiceStarted = false;
+
+      // ----------------- DIGIT PARSING (EN + HI + KN) -----------------
+      function parseNumberToEnglish(text) {
+        if (!text) return "";
+
+        text = text.toLowerCase().trim();
+
+        const wordMap = {
+          // Hindi
+          "शून्य": "0", "एक": "1", "दो": "2", "तीन": "3", "चार": "4", "पाँच": "5", "छह": "6", "सात": "7", "आठ": "8", "नौ": "9",
+          "ek": "1", "do": "2", "teen": "3", "char": "4", "paanch": "5", "chhah": "6", "saat": "7", "aath": "8", "nau": "9",
+          // Kannada
+          "ಒಂದು": "1", "ಎರಡು": "2", "ಮೂರು": "3", "ನಾಲ್ಕು": "4", "ಐದು": "5", "ಆರು": "6", "ಏಳು": "7", "ಎಂಟು": "8", "ಒಂಬತ್ತು": "9", "ಸುನ್ನೆ": "0",
+          "ondu": "1", "eradu": "2", "mooru": "3", "nalku": "4", "aidu": "5", "Idu": "5", "aaru": "6", "aru": "6", "elu": "7", "entu": "8", "ombattu": "9", "sunne": "0"
+        };
+
+        // Replace words with digits
+        for (const key in wordMap) {
+          text = text.replace(new RegExp(key, "g"), wordMap[key]);
+        }
+
+        // Replace Hindi/Kannada numerals with English digits
+        text = text.split("").map(c => {
+          const code = c.charCodeAt(0);
+          if (code >= 0x0966 && code <= 0x096F) return (code - 0x0966).toString(); // Hindi ०-९
+          if (code >= 0x0CE6 && code <= 0x0CEF) return (code - 0x0CE6).toString(); // Kannada ೦-೯
+          if (code >= 48 && code <= 57) return c; // English digits
+          return "";
+        }).join("");
+
+        // Keep only digits
+        return text.replace(/\D/g, "");
+      }
+
+      // ----------------- TRANSLATION -----------------
+      const pageTextMap = {
+        "page-title": { en: "Register", hi: "रजिस्टर", kn: "ನೋಂದಣಿ" },
+        "label-name": { en: "Name", hi: "नाम", kn: "ಹೆಸರು" },
+        "label-email": { en: "Email", hi: "ईमेल", kn: "ಇಮೇಲ್" },
+        "label-password": { en: "4-Digit PIN", hi: "4-अंकों का पिन", kn: "4 ಅಂಕಿ ಪಿನ್" },
+        "label-account": { en: "Account Number", hi: "खाता नंबर", kn: "ಖಾತೆ ಸಂಖ್ಯೆ" },
+        "label-phone": { en: "Phone Number", hi: "फोन नंबर", kn: "ಫೋನ್ ಸಂಖ್ಯೆ" },
+        "label-aadhaar": { en: "Aadhaar Number", hi: "आधार नंबर", kn: "ಆಧಾರ್ ಸಂಖ್ಯೆ" },
+        "label-nominee": { en: "Nominee", hi: "नामांकित व्यक्ति", kn: "ನಾಮಿನಿ" },
+        "label-role": { en: "Role", hi: "भूमिका", kn: "ಪಾತ್ರ" },
+        "label-face": { en: "Face Enrollment (Single Photo)", hi: "चेहरे की पहचान (एक फोटो)", kn: "ಮುಖ ದಾಖಲಾತಿ (ಒಂದು ಫೋಟೋ)" },
+        "submitBtn": { en: "Create Account", hi: "खाता बनाएँ", kn: "ಖಾತೆ ರಚಿಸಿ" },
+        "captureBtn": { en: "Capture Photo", hi: "फोटो लें", kn: "ಚಿತ್ರ ತೆಗೆದುಕೊಳ್ಳಿ" }
+      };
+
+      function translatePage() {
+        for (const id in pageTextMap) {
+          const elem = document.getElementById(id);
+          if (elem && pageTextMap[id][selectedLang]) elem.innerText = pageTextMap[id][selectedLang];
+        }
+      }
+      translatePage();
+
+      // ----------------- TTS -----------------
+      async function speak(text) {
+        const res = await fetch("/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, lang: selectedLang })
+        });
+        const data = await res.json();
+        if (!data.audio) return;
+        await new Promise(r => {
+          const a = new Audio(data.audio);
+          a.onended = r;
+          a.play();
+        });
+      }
+
+      // ----------------- CAMERA -----------------
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("canvas");
+      const captureBtn = document.getElementById("captureBtn");
+      const faceInput = document.getElementById("face_images");
+      const submitBtn = document.getElementById("submitBtn");
+      const status = document.getElementById("status");
+
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => { console.error(err); status.innerText = "Cannot access webcam"; });
+
+      captureBtn.addEventListener("click", () => {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        faceInput.value = JSON.stringify([canvas.toDataURL("image/jpeg")]);
+        submitBtn.disabled = false;
+        status.innerText = "✅ Photo captured! You can now submit the form.";
+      });
+
+      // ----------------- VOICE FLOW -----------------
+      const fields = [
+        { id: "name", en: "Please say your full name", hi: "कृपया अपना पूरा नाम बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರನ್ನು ಹೇಳಿ" },
+        { id: "email", en: "Please say your email slowly", hi: "कृपया अपना ईमेल धीरे बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಇಮೇಲ್ ನಿಧಾನವಾಗಿ ಹೇಳಿ" },
+        { id: "password", en: "Please say your four digit pin", hi: "कृपया अपना चार अंकों का पिन बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ನಾಲ್ಕಂಕಿ ಪಿನ್ ಹೇಳಿ" },
+        { id: "account_number", en: "Please say your account number", hi: "कृपया अपना खाता नंबर बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಖಾತೆ ಸಂಖ್ಯೆಯನ್ನು ಹೇಳಿ" },
+        { id: "phone_number", en: "Please say your phone number", hi: "कृपया अपना मोबाइल नंबर बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಹೇಳಿ" },
+        { id: "aadhaar_number", en: "Please say your Aadhaar number", hi: "कृपया अपना आधार नंबर बोलें", kn: "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಆಧಾರ್ ಸಂಖ್ಯೆ ಹೇಳಿ" },
+        { id: "nominee", en: "Please say nominee name", hi: "कृपया नामांकित व्यक्ति का नाम बोलें", kn: "ದಯವಿಟ್ಟು ನಾಮಿನಿ ಹೆಸರನ್ನು ಹೇಳಿ" },
+        { id: "role", en: "Say user or admin", hi: "यूज़र या एडमिन बोलें", kn: "ಯೂಸರ್ ಅಥವಾ ಆಡ್ಮಿನ್ ಎಂದು ಹೇಳಿ" }
+      ];
+
+      async function askField() {
+        if (index >= fields.length) { faceStage = true; return startFaceCapture(); }
+        const f = fields[index];
+        await speak(f[selectedLang]);
+        startListening();
+      }
+
+      function startListening() {
+        if (isProcessing) return;
+        isProcessing = true;
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+          recorder = new MediaRecorder(stream); chunks = [];
+          recorder.ondataavailable = e => chunks.push(e.data);
+          recorder.start();
+          setTimeout(() => recorder.stop(), 10000);
+          recorder.onstop = processAudio;
+        });
+      }
+
+      async function processAudio() {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        const fd = new FormData(); fd.append("audio", blob);
+        const res = await fetch("/stt", { method: "POST", body: fd });
+        const data = await res.json();
+        let text = data.text?.trim().toLowerCase();
+        isProcessing = false;
+        if (!text) { await retrySpeak(); return askField(); }
+        if (faceStage) return handleFaceCommand(text);
+        if (confirming) handleConfirm(text);
+        else { pendingValue = text; confirmValue(); }
+      }
+
+      async function confirmValue() {
+        confirming = true;
+        if (selectedLang === "kn") await speak(`ನೀವು ${pendingValue} ಎಂದು ಹೇಳಿದ್ದೀರಿ. ಸರಿಯೇ? ಹೌದು ಅಥವಾ ಇಲ್ಲ`);
+        else if (selectedLang === "hi") await speak(`आपने ${pendingValue} कहा है। क्या यह सही है? हाँ या नहीं`);
+        else await speak(`You said ${pendingValue}. Is it correct? Say yes or no`);
+        startListening();
+      }
+
+      async function handleConfirm(text) {
+        confirming = false;
+        text = text.toLowerCase().trim();
+        const yes = ["yes", "yeah", "हाँ", "how do", "ಹೌದು"];
+        const no = ["no", "nah", "नहीं", "illa", "ಇಲ್ಲ"];
+        if (yes.some(o => text.includes(o))) fillField();
+        else if (no.some(o => text.includes(o))) { await retrySpeak(); askField(); }
+        else { await retrySpeak(); confirmValue(); }
+      }
+
+      async function fillField() {
+        const f = fields[index];
+        let v = pendingValue;
+
+        // ---------- NUMBER FIELDS ----------
+        if (["password", "phone_number", "aadhaar_number", "account_number"].includes(f.id)) {
+          v = parseNumberToEnglish(v);
+
+          // PIN
+          if (f.id === "password") {
+            if (v.length !== 4) {
+              await speakError("pin");
+              return askField();
+            }
+          }
+
+          // PHONE
+          if (f.id === "phone_number") {
+            if (v.length !== 10) {
+              await speakError("phone");
+              return askField();
+            }
+          }
+
+          // AADHAAR
+          if (f.id === "aadhaar_number") {
+            if (v.length !== 12) {
+              await speakError("aadhaar");
+              return askField();
+            }
+          }
+
+          // ACCOUNT (minimum 10 digits)
+          if (f.id === "account_number") {
+            if (v.length < 10) {
+              await speakError("account");
+              return askField();
+            }
+          }
+        }
+
+        // ---------- OTHER FIELDS ----------
+        if (f.id === "email") {
+          v = v.replace(/\s+/g, "")
+            .replace(/at/g, "@")
+            .replace(/dot/g, ".");
+        }
+
+        if (f.id === "name" || f.id === "nominee") {
+          v = v.split(" ")
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(" ");
+        }
+
+        document.getElementById(f.id).value = v;
+        index++;
+        askField();
+      }
+
+      async function speakError(type) {
+        if (selectedLang === "kn") {
+          if (type === "pin") await speak("ದಯವಿಟ್ಟು ನಾಲ್ಕು ಅಂಕಿ ಪಿನ್ ಹೇಳಿ");
+          if (type === "phone") await speak("ದಯವಿಟ್ಟು ಹತ್ತು ಅಂಕಿಯ ಫೋನ್ ಸಂಖ್ಯೆ ಹೇಳಿ");
+          if (type === "aadhaar") await speak("ದಯವಿಟ್ಟು ಹನ್ನೆರಡು ಅಂಕಿಯ ಆಧಾರ್ ಸಂಖ್ಯೆ ಹೇಳಿ");
+          if (type === "account") await speak("ದಯವಿಟ್ಟು ಕನಿಷ್ಠ ಹತ್ತು ಅಂಕಿಯ ಖಾತೆ ಸಂಖ್ಯೆ ಹೇಳಿ");
+        }
+        else if (selectedLang === "hi") {
+          if (type === "pin") await speak("कृपया चार अंकों का पिन बताएं");
+          if (type === "phone") await speak("कृपया दस अंकों का फोन नंबर बताएं");
+          if (type === "aadhaar") await speak("कृपया बारह अंकों का आधार नंबर बताएं");
+          if (type === "account") await speak("कृपया कम से कम दस अंकों का खाता नंबर बताएं");
+        }
+        else {
+          if (type === "pin") await speak("Please say exactly four digit pin");
+          if (type === "phone") await speak("Please say ten digit phone number");
+          if (type === "aadhaar") await speak("Please say twelve digit Aadhaar number");
+          if (type === "account") await speak("Please say at least ten digit account number");
+        }
+      }
+
+      async function startFaceCapture() {
+        status.innerText = "Align your face";
+        if (selectedLang === "kn") await speak("ದಯವಿಟ್ಟು ನಿಮ್ಮ ಮುಖವನ್ನು ಸರಿಹೊಂದಿಸಿ");
+        else if (selectedLang === "hi") await speak("कृपया अपना चेहरा सही तरह से रखें");
+        else await speak("Please align your face");
+        await new Promise(r => setTimeout(r, 3000));
+        if (selectedLang === "kn") await speak("ಕ್ಯಾಪ್ಚರ್ ಎಂದು ಹೇಳಿ");
+        else if (selectedLang === "hi") await speak("कैप्चर बोलें");
+        else await speak("Say capture");
+        startListening();
+      }
+
+      async function handleFaceCommand(text) {
+        if (text.includes("capture") || text.includes("ಕ್ಯಾಪ್ಚರ್") || text.includes("कैप्चर")) {
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+          canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+          faceInput.value = JSON.stringify([canvas.toDataURL("image/jpeg")]);
+          submitBtn.disabled = false;
+          status.innerText = "✅ Photo captured! You can now submit the form.";
+          if (selectedLang === "kn") await speak("ಚಿತ್ರ ತೆಗೆದುಕೊಳ್ಳಲಾಗಿದೆ. ಖಾತೆ ಸೃಷ್ಟಿಸಲಾಗುತ್ತಿದೆ");
+          else if (selectedLang === "hi") await speak("फोटो लिया गया है। खाता बनाया जा रहा है");
+          else await speak("Photo captured. You can submit now");
+        } else { await speak("Say capture"); startListening(); }
+      }
+
+      async function retrySpeak() {
+        if (selectedLang === "kn") await speak("ನನಗೆ ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ಮತ್ತೆ ಹೇಳಿ");
+        else if (selectedLang === "hi") await speak("मुझे ठीक से सुनाई नहीं दिया। फिर से बोलें");
+        else await speak("I did not hear clearly. Please repeat");
+      }
+
+      async function startVoiceOnce() {
+        if (voiceStarted) return;
+        voiceStarted = true;
+        if (selectedLang === "kn") await speak("ನೋಂದಣಿ ಪುಟಕ್ಕೆ ಸ್ವಾಗತ");
+        else if (selectedLang === "hi") await speak("रजिस्टर पेज में आपका स्वागत है");
+        else await speak("Welcome to register page");
+        translatePage();
+        askField();
+      }
+
+      document.addEventListener("click", startVoiceOnce, { once: true });
+      document.addEventListener("keydown", startVoiceOnce, { once: true });
+    </script>
+    {% endblock %}

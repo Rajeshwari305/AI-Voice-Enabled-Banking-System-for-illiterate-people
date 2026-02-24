@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div
+  id="page"
+  data-has-receipt="{{ 'true' if withdraw_info else 'false' }}"
+  class="bg-gray-200 shadow-lg rounded-xl p-6 w-full max-w-sm mx-auto mt-10"
+>
+  <h2 class="text-xl font-semibold mb-4 text-center text-gray-800" id="label-withdraw">
+    Withdraw
+  </h2>
+
+  <!-- ================= FORM ================= -->
+  <form method="post" id="withdrawForm" class="space-y-4">
+    <div>
+      <label class="block text-gray-700 font-medium mb-1" id="label-amount">
+        Amount (₹)
+      </label>
+      <input
+        id="money"
+        name="amount"
+        type="number"
+        min="1"
+        step="0.01"
+        required
+        class="w-full px-3 py-2 border rounded-lg bg-white text-gray-900"
+      />
+    </div>
+
+    <button
+      type="submit"
+      class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+      id="label-withdrawbtn"
+    >
+      Withdraw
+    </button>
+  </form>
+
+  {% if withdraw_info %}
+  <!-- ================= RECEIPT ================= -->
+  <div id="receiptSection" class="mt-6 p-4 border rounded-lg bg-white text-black">
+    <h3 class="text-lg font-bold mb-4 text-center" id="label-receipt">
+      Withdrawal Receipt
+    </h3>
+    <p><strong id="label-receiptno">Receipt No:</strong> {{ withdraw_info.receipt_number }}</p>
+    <p><strong id="label-name">Name:</strong> {{ withdraw_info.name }}</p>
+    <p><strong id="label-account">Account Number:</strong> {{ withdraw_info.account_number }}</p>
+    <p><strong id="label-amountdep">Amount Withdrawn:</strong> ₹{{ withdraw_info.amount }}</p>
+    <p><strong id="label-balanceafter">Balance After:</strong> ₹{{ withdraw_info.balance_after }}</p>
+    <p><strong id="label-datetime">Date & Time:</strong> {{ withdraw_info.datetime }}</p>
+  </div>
+
+  <button onclick="generatePDF()" class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg" id="label-print">
+    Print Receipt
+  </button>
+
+  <a
+  href="{{ url_for('dashboard') }}"
+  class="mt-2 block text-center w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+  id="label-back"
+>
+  Back to Dashboard
+</a>
+
+  {% endif %}
+</div>
+
+<!-- ================= PDF ================= -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+<script>
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const canvas = await html2canvas(document.getElementById("receiptSection"), { scale: 2 });
+  const img = canvas.toDataURL("image/png");
+  const pdf = new jsPDF();
+  pdf.addImage(img, "PNG", 20, 20, 550, 0);
+  pdf.save("withdraw_receipt.pdf");
+}
+</script>
+
+<!-- ================= VOICE + MULTI LANGUAGE ================= -->
+<script>
+const HAS_RECEIPT = document.getElementById("page").dataset.hasReceipt === "true";
+const DASHBOARD_URL = "{{ url_for('dashboard') }}";
+let selectedLang = localStorage.getItem("lang") || "en";
+let stage = "amount";
+let voiceStarted = false;
+
+/* ===== LABELS ===== */
+const labels = {
+  en: {
+    withdraw: "Withdraw",
+    amount: "Amount (₹)",
+    withdrawbtn: "Withdraw",
+    receipt: "Withdrawal Receipt",
+    receiptno: "Receipt No:",
+    name: "Name:",
+    account: "Account Number:",
+    amountdep: "Amount Withdrawn:",
+    balanceafter: "Balance After:",
+    datetime: "Date & Time:",
+    print: "Print Receipt",
+    back: "Back to Dashboard"
+  },
+  hi: {
+    withdraw: "निकासी",
+    amount: "राशि (₹)",
+    withdrawbtn: "निकासी करें",
+    receipt: "निकासी रसीद",
+    receiptno: "रसीद संख्या:",
+    name: "नाम:",
+    account: "खाता संख्या:",
+    amountdep: "निकासी राशि:",
+    balanceafter: "शेष राशि:",
+    datetime: "तिथि और समय:",
+    print: "रसीद प्रिंट करें",
+    back: "डैशबोर्ड पर वापस जाएँ"
+  },
+  kn: {
+    withdraw: "ತೆಗೆಯುವಿಕೆ",
+    amount: "ಮೊತ್ತ (₹)",
+    withdrawbtn: "ತೆಗೆದುಹಾಕಿ",
+    receipt: "ತೆಗೆಯುವಿಕೆ ರಸೀದಿ",
+    receiptno: "ರಸೀದಿ ಸಂಖ್ಯೆ:",
+    name: "ಹೆಸರು:",
+    account: "ಖಾತೆ ಸಂಖ್ಯೆ:",
+    amountdep: "ತೆಗೆದ ಮೊತ್ತ:",
+    balanceafter: "ಬ್ಯಾಲೆನ್ಸ್ ನಂತರ:",
+    datetime: "ದಿನಾಂಕ & ಸಮಯ:",
+    print: "ರಸೀದಿ ಮುದ್ರಿಸಿ",
+    back: "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ಗೆ ಹಿಂತಿರುಗಿ"
+  }
+};
+
+function setLabels() {
+  for (const id in labels[selectedLang]) {
+    const el = document.getElementById("label-" + id);
+    if (el) el.innerText = labels[selectedLang][id];
+  }
+}
+
+/* ===== KANNADA NUMBER PARSER ===== */
+function kannadaWordsToNumber(text) {
+  const map = {
+    "ಒಂದು": 1,
+    "ಎರಡು": 2,
+    "ಮೂರು": 3,
+    "ನಾಲ್ಕು": 4,
+    "ಐದು": 5,
+    "ಆರು": 6,
+    "ಏಳು": 7,
+    "ಎಂಟು": 8,
+    "ಒಂಬತ್ತು": 9,
+    "ಹತ್ತು": 10,
+    "ಐದುನೂರು": 500,
+    "ಎರಡುನೂರು": 200,
+    "ಮೂರುನೂರು": 300,
+    "ನಾಲ್ಕುನೂರು": 400,
+    "ನೂರು": 100
+  };
+
+  if (map[text]) return map[text];
+
+  const parts = text.split(" ");
+  if (parts.length === 2 && map[parts[0]] && parts[1] === "ನೂರು") {
+    return map[parts[0]] * 100;
+  }
+
+  return NaN;
+}
+
+/* ===== TTS ===== */
+async function speak(text) {
+  const r = await fetch("/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, lang: selectedLang })
+  });
+  const d = await r.json();
+  if (!d.audio) return;
+  const a = new Audio(d.audio);
+  a.play();
+  await new Promise(r => (a.onended = r));
+}
+
+/* ===== LISTEN ===== */
+function listen() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    const rec = new MediaRecorder(stream);
+    let chunks = [];
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.start();
+    setTimeout(() => rec.stop(), 6000);
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      const fd = new FormData();
+      fd.append("audio", blob);
+      fd.append("lang", selectedLang);
+      const r = await fetch("/stt", { method: "POST", body: fd });
+      const d = await r.json();
+      handleAmount((d.text || "").toLowerCase());
+    };
+  });
+}
+
+async function askPrint() {
+  await speak(
+    selectedLang === "kn"
+      ? "ರಸೀದಿಯನ್ನು ಮುದ್ರಿಸಬೇಕಾ? ಹೌದು ಅಥವಾ ಇಲ್ಲ ಎಂದು ಹೇಳಿ"
+      : selectedLang === "hi"
+      ? "क्या आप रसीद प्रिंट करना चाहते हैं? हाँ या नहीं कहें"
+      : "Do you want to print the receipt? Say yes or no"
+  );
+  listenForPrint();
+}
+
+function listenForPrint() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    const rec = new MediaRecorder(stream);
+    let chunks = [];
+
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.start();
+    setTimeout(() => rec.stop(), 5000);
+
+    rec.onstop = async () => {
+      const blob = new Blob(chunks, { type: "audio/webm" });
+      const fd = new FormData();
+      fd.append("audio", blob);
+      fd.append("lang", selectedLang);
+
+      const r = await fetch("/stt", { method: "POST", body: fd });
+      const d = await r.json();
+      const text = (d.text || "").toLowerCase();
+
+      if (
+        text.includes("yes") ||
+        text.includes("print") ||
+        text.includes("हाँ") ||
+        text.includes("how do")
+      ) {
+        generatePDF();
+        speak(
+          selectedLang === "kn"
+            ? "ರಸೀದಿ ಮುದ್ರಿಸಲಾಗುತ್ತಿದೆ"
+            : selectedLang === "hi"
+            ? "रसीद प्रिंट की जा रही है"
+            : "Printing receipt"
+        );
+      } else {
+        speak(
+          selectedLang === "kn"
+            ? "ಸರಿ, ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ಗೆ ಹಿಂತಿರುಗಲಾಗುತ್ತಿದೆ"
+            : selectedLang === "hi"
+            ? "ठीक है, डैशबोर्ड पर लौट रहे हैं"
+            : "Okay, returning to dashboard"
+        );
+        setTimeout(() => {
+          window.location.href = "{{ url_for('dashboard') }}";
+        }, 2000);
+      }
+    };
+  });
+}
+
+/* ===== FLOW ===== */
+async function askAmount() {
+  await speak(
+    selectedLang === "kn" ? "ದಯವಿಟ್ಟು ತೆಗೆಯುವ ಮೊತ್ತವನ್ನು ಹೇಳಿ" :
+    selectedLang === "hi" ? "कृपया निकासी राशि बताएं" :
+    "Please say the withdrawal amount"
+  );
+  listen();
+}
+
+function handleAmount(text) {
+  let amt = parseFloat(text.replace(/[^\d.]/g, ""));
+  if (isNaN(amt)) amt = kannadaWordsToNumber(text);
+  if (isNaN(amt) || amt <= 0) return askAmount();
+  document.getElementById("money").value = amt.toFixed(2);
+  document.getElementById("withdrawForm").submit();
+}
+
+/* ===== INIT ===== */
+document.addEventListener("DOMContentLoaded", setLabels);
+document.addEventListener("DOMContentLoaded", async () => {
+  setLabels();
+
+  if (HAS_RECEIPT) {
+    // 🔥 ASK PRINT WHEN RECEIPT EXISTS
+    await askPrint();
+  } else {
+    // 🔥 ASK AMOUNT ON FIRST CLICK
+    document.addEventListener(
+      "click",
+      () => {
+        if (!voiceStarted) {
+          voiceStarted = true;
+          askAmount();
+        }
+      },
+      { once: true }
+    );
+  }
+});
+</script>
+
+{% endblock %}

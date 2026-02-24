@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Digital Bank</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:,">
+</head>
+
+<body class="min-h-screen flex flex-col text-white bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500">
+
+<header>
+  <nav class="fixed left-0 w-full bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-500 px-6 py-3 flex justify-between items-center shadow-lg z-50">
+    <div class="text-2xl font-bold">
+      <a href="{{ url_for('index') }}">Digital Bank</a>
+    </div>
+
+    <div class="flex space-x-4 items-center">
+      <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('admin_login') }}">Register</a>
+      <a href="{{ url_for('login') }}">Login</a>
+
+      <!-- Language Buttons -->
+      <button onclick="setLanguage('en')">English</button>
+      <button onclick="setLanguage('hi')">हिंदी</button>
+      <button onclick="setLanguage('kn')">ಕನ್ನಡ</button>
+    </div>
+  </nav>
+</header>
+
+<main class="flex-grow mt-20 px-4">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- ================= GOOGLE TRANSLATE ================= -->
+<div id="google_translate_element" style="position:absolute; top:-1000px; left:-1000px;"></div>
+<script src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+<script>
+/* ====================== LANGUAGE MANAGEMENT ====================== */
+let selectedLang = localStorage.getItem("lang") || "en";
+
+function googleTranslateElementInit() {
+  new google.translate.TranslateElement(
+    {
+      pageLanguage: "en",
+      includedLanguages: "en,hi,kn",
+      autoDisplay: false
+    },
+    "google_translate_element"
+  );
+}
+
+/* Force Google Translate */
+function forceTranslate(lang) {
+  let attempts = 0;
+  const maxAttempts = 30;
+
+  const timer = setInterval(() => {
+    const combo = document.querySelector(".goog-te-combo");
+    if (combo) {
+      combo.value = lang;
+      combo.dispatchEvent(new Event("change"));
+      clearInterval(timer);
+    }
+    attempts++;
+    if (attempts >= maxAttempts) clearInterval(timer);
+  }, 300);
+}
+
+/* Manual language selection */
+function setLanguage(lang) {
+  selectedLang = lang;
+  localStorage.setItem("lang", lang);
+  forceTranslate(lang);
+}
+
+/* Apply saved language on EVERY page load */
+function applySavedLanguage() {
+  const lang = localStorage.getItem("lang") || "en";
+  if (lang !== "en") forceTranslate(lang);
+}
+
+/* Run after page load */
+function waitAndTranslate() {
+  const lang = localStorage.getItem("lang") || "en";
+  if (lang === "en") return;
+
+  let tries = 0;
+  const maxTries = 50;
+
+  const interval = setInterval(() => {
+    const combo = document.querySelector(".goog-te-combo");
+    if (combo) {
+      combo.value = lang;
+      combo.dispatchEvent(new Event("change"));
+      clearInterval(interval);
+    }
+    if (++tries >= maxTries) clearInterval(interval);
+  }, 300);
+}
+
+/* Run on EVERY page navigation */
+document.addEventListener("DOMContentLoaded", () => {
+  waitAndTranslate();
+});
+
+/* Sync across tabs/pages */
+window.addEventListener("storage", (e) => {
+  if (e.key === "lang") {
+    selectedLang = e.newValue;
+    forceTranslate(selectedLang);
+  }
+});
+</script>
+
+<!-- ================= VOICE SYSTEM ================= -->
+<script>
+let recorder;
+let chunks = [];
+let stage = "LANG";
+
+/* TEXT TO SPEECH */
+async function speak(text, lang = selectedLang) {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, lang })
+  });
+  const data = await res.json();
+  if (!data.audio) return;
+
+  await new Promise(resolve => {
+    const audio = new Audio(data.audio);
+    audio.onended = resolve;
+    audio.play();
+  });
+}
+
+/* START VOICE FLOW */
+async function startVoice() {
+  stage = "LANG";
+  await speak("Which language do you want? English, Hindi or Kannada", "en");
+  await speak("आप कौन सी भाषा चाहते हैं? अंग्रेजी, हिंदी या कन्नड़", "hi");
+  await speak("ನಿಮಗೆ ಯಾವ ಭಾಷೆ ಬೇಕು? ಇಂಗ್ಲಿಷ್, ಹಿಂದಿ ಅಥವಾ ಕನ್ನಡ", "kn");
+  startRecording();
+}
+
+/* RECORD AUDIO */
+function startRecording() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(() => recorder.stop(), 4000);
+    recorder.onstop = sendAudio;
+  });
+}
+
+/* SEND AUDIO */
+async function sendAudio() {
+  const blob = new Blob(chunks, { type: "audio/webm" });
+  const fd = new FormData();
+  fd.append("audio", blob);
+
+  const res = await fetch("/stt", { method: "POST", body: fd });
+  const data = await res.json();
+
+  if (!data.text) {
+    retryMessage();
+    startRecording();
+    return;
+  }
+
+  const text = data.text.toLowerCase();
+  stage === "LANG" ? handleLanguage(text) : handleAction(text);
+}
+
+/* HANDLE LANGUAGE */
+async function handleLanguage(text) {
+  if (text.includes("english")) selectedLang = "en";
+  else if (text.includes("hindi") || text.includes("हिंदी")) selectedLang = "hi";
+  else if (text.includes("kannada") || text.includes("ಕನ್ನಡ")) selectedLang = "kn";
+  else {
+    retryMessage();
+    startRecording();
+    return;
+  }
+
+  localStorage.setItem("lang", selectedLang);
+  forceTranslate(selectedLang);
+
+  stage = "ACTION";
+  await askNext();
+  startRecording();
+}
+
+/* HANDLE ACTION */
+function handleAction(text) {
+  if (text.includes("register") || text.includes("रजिस्टर") || text.includes("ರಿಜಿಸ್ಟರ್")) {
+    window.location.href = "{{ url_for('admin_login') }}";
+    return;
+  }
+
+  if (text.includes("login") || text.includes("लॉगिन") || text.includes("ಲಾಗಿನ್")) {
+    window.location.href = "{{ url_for('login') }}";
+    return;
+  }
+
+  retryAction();
+}
+
+/* PROMPTS */
+async function askNext() {
+  if (selectedLang === "en") await speak("Say login or register");
+  else if (selectedLang === "hi") await speak("लॉगिन या रजिस्टर कहें");
+  else await speak("ಲಾಗಿನ್ ಅಥವಾ ರಿಜಿಸ್ಟರ್ ಹೇಳಿ");
+}
+
+async function retryMessage() {
+  if (selectedLang === "en") speak("Please repeat");
+  else if (selectedLang === "hi") speak("फिर से बोलें");
+  else speak("ಮತ್ತೆ ಹೇಳಿ");
+}
+
+async function retryAction() {
+  await askNext();
+  startRecording();
+}
+</script>
+
+<!-- ================= AUTO START VOICE ================= -->
+<script>
+let voiceStarted = false;
+
+function startVoiceOnce() {
+  if (voiceStarted) return;
+  voiceStarted = true;
+  startVoice();
+
+  document.removeEventListener("click", startVoiceOnce);
+  document.removeEventListener("keydown", startVoiceOnce);
+}
+
+/* ====================== ONLY START IF NOT DISABLED ====================== */
+document.addEventListener("DOMContentLoaded", () => {
+  if (!window.DISABLE_BASE_VOICE) {
+    document.addEventListener("click", startVoiceOnce);
+    document.addEventListener("keydown", startVoiceOnce);
+  }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-xl mx-auto bg-white/95 text-black p-8 rounded-2xl shadow-lg border border-gray-200">
+  <h2 class="text-2xl font-bold text-center text-indigo-700 mb-6" id="label-title">
+    KYC Form
+  </h2>
+
+  <form method="post" id="kycForm" class="space-y-3 max-w-md mx-auto text-center">
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-full_name">Full Name</label>
+      <input name="full_name" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-address">Address</label>
+      <input name="address" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-id_type">Government ID Type</label>
+      <input name="id_type" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-id_number">ID Number</label>
+      <input name="id_number" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-phone_number">Phone Number</label>
+      <input name="phone_number" maxlength="10" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-aadhaar_number">Aadhaar Number</label>
+      <input name="aadhaar_number" maxlength="12" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold mb-1" id="label-email">Email</label>
+      <input name="email" class="w-full border rounded-lg px-4 py-3 text-center">
+    </div>
+
+    <button type="submit" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg">
+      Save KYC
+    </button>
+
+    <!-- hidden auto submit -->
+    <button type="submit" id="autoSubmit" class="hidden"></button>
+  </form>
+
+  <div class="max-w-md mx-auto mt-4">
+    <a href="{{ url_for('dashboard') }}"
+      class="block w-full bg-blue-700 text-white font-bold py-3 rounded-lg text-center">
+      Go to Dashboard
+    </a>
+  </div>
+</div>
+
+<script>
+/* ================= BASIC SETUP ================= */
+let lang = localStorage.getItem("lang") || "en";
+let recorder, chunks = [];
+let index = 0;
+
+/* ================= FIELD ORDER ================= */
+const fields = [
+  "full_name",
+  "address",
+  "id_type",
+  "id_number",
+  "phone_number",
+  "aadhaar_number",
+  "email"
+];
+
+/* ================= QUESTIONS ================= */
+const Q = {
+  full_name: {
+    en:"Please say your full name",
+    hi:"कृपया अपना पूरा नाम बताएं",
+    kn:"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಂಪೂರ್ಣ ಹೆಸರು ಹೇಳಿ"
+  },
+  address: {
+    en:"Please say your address",
+    hi:"कृपया अपना पता बताएं",
+    kn:"ದಯವಿಟ್ಟು ನಿಮ್ಮ ವಿಳಾಸ ಹೇಳಿ"
+  },
+  id_type: {
+    en:"Please say government ID type",
+    hi:"कृपया सरकारी पहचान प्रकार बताएं",
+    kn:"ದಯವಿಟ್ಟು ಸರ್ಕಾರದ ಗುರುತು ಪ್ರಕಾರ ಹೇಳಿ"
+  },
+  id_number: {
+    en:"Please say ID number",
+    hi:"कृपया ID नंबर बताएं",
+    kn:"ದಯವಿಟ್ಟು ಗುರುತು ಸಂಖ್ಯೆ ಹೇಳಿ"
+  },
+  phone_number: {
+    en:"Please say phone number",
+    hi:"कृपया फोन नंबर बताएं",
+    kn:"ದಯವಿಟ್ಟು ಫೋನ್ ಸಂಖ್ಯೆ ಹೇಳಿ"
+  },
+  aadhaar_number: {
+    en:"Please say Aadhaar number",
+    hi:"कृपया आधार नंबर बताएं",
+    kn:"ದಯವಿಟ್ಟು ಆಧಾರ್ ಸಂಖ್ಯೆ ಹೇಳಿ"
+  },
+  email: {
+    en:"Please say email",
+    hi:"कृपया ईमेल बताएं",
+    kn:"ದಯವಿಟ್ಟು ಇಮೇಲ್ ಹೇಳಿ"
+  }
+};
+
+/* ================= LABEL TRANSLATION ================= */
+function setLabels() {
+  const L = {
+    en:{title:"KYC Form",full_name:"Full Name",address:"Address",id_type:"Government ID Type",id_number:"ID Number",phone_number:"Phone Number",aadhaar_number:"Aadhaar Number",email:"Email"},
+    hi:{title:"केवाईसी फॉर्म",full_name:"पूरा नाम",address:"पता",id_type:"सरकारी पहचान प्रकार",id_number:"पहचान संख्या",phone_number:"फोन नंबर",aadhaar_number:"आधार संख्या",email:"ईमेल"},
+    kn:{title:"ಕೆವೈಸಿ ಫಾರ್ಮ್",full_name:"ಪೂರ್ಣ ಹೆಸರು",address:"ವಿಳಾಸ",id_type:"ಸರ್ಕಾರಿ ಗುರುತು ಪ್ರಕಾರ",id_number:"ಗುರುತು ಸಂಖ್ಯೆ",phone_number:"ಫೋನ್ ಸಂಖ್ಯೆ",aadhaar_number:"ಆಧಾರ್ ಸಂಖ್ಯೆ",email:"ಇಮೇಲ್"}
+  };
+  for (let k in L[lang]) {
+    const el = document.getElementById("label-"+k);
+    if (el) el.innerText = L[lang][k];
+  }
+}
+
+/* ================= FIND FIRST EMPTY FIELD ================= */
+function resetIndexToFirstEmpty() {
+  index = 0;
+  while (index < fields.length) {
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if (el && el.value.trim() === "") break;
+    index++;
+  }
+}
+
+/* ================= LOAD AUTOFILL ================= */
+window.addEventListener("DOMContentLoaded", async () => {
+  setLabels();
+
+  const res = await fetch('{{ url_for("api_autofill") }}?type=kyc');
+  const json = await res.json();
+
+  if (json.status === "ok") {
+    for (let k in json.data) {
+      const el = document.querySelector(`[name="${k}"]`);
+      if (el) el.value = json.data[k];
+    }
+  }
+
+  resetIndexToFirstEmpty();
+});
+
+/* ================= SERVER TTS (SAME AS TRANSACTION) ================= */
+async function speak(text) {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text, lang })
+  });
+  const data = await res.json();
+  if (data.audio) {
+    await new Promise(resolve => {
+      const audio = new Audio(data.audio);
+      audio.onended = resolve;
+      audio.play();
+    });
+  }
+}
+
+/* ================= LISTEN ================= */
+function listen() {
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(() => recorder.stop(), 6000);
+    recorder.onstop = processAudio;
+  });
+}
+
+/* ================= PROCESS AUDIO ================= */
+async function processAudio() {
+  const blob = new Blob(chunks,{ type:"audio/webm" });
+  const fd = new FormData();
+  fd.append("audio", blob);
+  fd.append("lang", lang);
+
+  const r = await fetch("/stt",{ method:"POST", body:fd });
+  const d = await r.json();
+  const text = (d.text || "").trim();
+
+  const el = document.querySelector(`[name="${fields[index]}"]`);
+  if (el && el.value.trim() === "" && text) el.value = text;
+
+  index++;
+  askNext();
+}
+
+/* ================= ASK ONLY EMPTY ================= */
+async function askNext() {
+  while (index < fields.length) {
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if (el && el.value.trim() === "") {
+      await speak(Q[fields[index]][lang]);
+      listen();
+      return;
+    }
+    index++;
+  }
+
+  await speak(lang==="hi"?"केवाईसी सेव किया जा रहा है":lang==="kn"?"ಕೆವೈಸಿ ಉಳಿಸಲಾಗುತ್ತಿದೆ":"Saving KYC");
+  document.getElementById("autoSubmit").click();
+}
+
+/* ================= START ON FIRST CLICK ================= */
+document.addEventListener("click", () => {
+  if (index < fields.length) askNext();
+}, { once:true });
+
+</script>
+{% endblock %}

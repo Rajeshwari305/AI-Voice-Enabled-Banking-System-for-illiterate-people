@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-lg mx-auto bg-white/90 text-black p-6 rounded-2xl shadow-lg border border-white/30">
+  <h2 class="text-2xl font-bold text-center text-indigo-700 mb-4" id="label-title">
+    Fixed / Recurring Deposit
+  </h2>
+
+  <form method="post" id="fdForm" class="space-y-4">
+
+    <div>
+      <label class="block font-semibold text-indigo-900 text-center" id="label-full_name">Full Name</label>
+      <input name="full_name" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-indigo-900 text-center" id="label-deposit_type">Deposit Type</label>
+      <select name="deposit_type" class="w-full border rounded p-2 text-center">
+        <option value="">-- Select --</option>
+        <option value="FD">Fixed Deposit</option>
+        <option value="RD">Recurring Deposit</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block font-semibold text-indigo-900 text-center" id="label-amount">Amount (₹)</label>
+      <input type="number" name="amount" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-indigo-900 text-center" id="label-duration">Duration (Months)</label>
+      <input type="number" name="duration" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-indigo-900 text-center" id="label-nominee">Nominee</label>
+      <input name="nominee" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <button type="submit" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg">
+      Create Deposit
+    </button>
+
+     <a
+  href="{{ url_for('dashboard') }}"
+  class="mt-2 block text-center w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+  id="label-back"
+>
+  Back to Dashboard
+</a>
+
+    <button type="submit" id="autoSubmit" class="hidden"></button>
+  </form>
+</div>
+
+<script>
+/* ================= BASIC ================= */
+let lang = localStorage.getItem("lang") || "en";
+let recorder, chunks = [];
+let index = 0;
+
+/* ================= FIELD ORDER ================= */
+const fields = ["full_name","deposit_type","amount","duration","nominee"];
+
+/* ================= QUESTIONS ================= */
+const Q = {
+  full_name: {en:"Please say your full name", hi:"कृपया अपना पूरा नाम बताएं", kn:"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಂಪೂರ್ಣ ಹೆಸರು ಹೇಳಿ"},
+  deposit_type: {en:"Please say deposit type, fixed or recurring", hi:"कृपया जमा का प्रकार बताएं", kn:"ದಯವಿಟ್ಟು ಠೇವಣಿ ಪ್ರಕಾರ ಹೇಳಿ"},
+  amount: {en:"Please say deposit amount", hi:"कृपया जमा राशि बताएं", kn:"ದಯವಿಟ್ಟು ಠೇವಣಿ ಮೊತ್ತ ಹೇಳಿ"},
+  duration: {en:"Please say duration in months", hi:"कृपया अवधि महीनों में बताएं", kn:"ದಯವಿಟ್ಟು ಅವಧಿಯನ್ನು ತಿಂಗಳಲ್ಲಿ ಹೇಳಿ"},
+  nominee: {en:"Please say nominee name", hi:"कृपया नामांकित व्यक्ति का नाम बताएं", kn:"ದಯವಿಟ್ಟು ನಾಮನಿರ್ದೇಶಿತ ವ್ಯಕ್ತಿಯ ಹೆಸರು ಹೇಳಿ"}
+};
+
+/* ================= LABELS ================= */
+function setLabels() {
+  const L = {
+    en: {title:"Fixed / Recurring Deposit", full_name:"Full Name", deposit_type:"Deposit Type", amount:"Amount (₹)", duration:"Duration (Months)", nominee:"Nominee"},
+    hi: {title:"फिक्स्ड / रिकरिंग डिपॉजिट", full_name:"पूरा नाम", deposit_type:"जमा का प्रकार", amount:"राशि (₹)", duration:"अवधि (महीने)", nominee:"नामांकित व्यक्ति"},
+    kn: {title:"ಫಿಕ್ಸ್ಡ್ / ರಿಕರಿಂಗ್ ಠೇವಣಿ", full_name:"ಪೂರ್ಣ ಹೆಸರು", deposit_type:"ಠೇವಣಿ ಪ್ರಕಾರ", amount:"ಮೊತ್ತ (₹)", duration:"ಅವಧಿ (ತಿಂಗಳು)", nominee:"ನಾಮನಿರ್ದೇಶಿತ ವ್ಯಕ್ತಿ"}
+  };
+  for (let k in L[lang]) {
+    const el = document.getElementById("label-"+k);
+    if(el) el.innerText = L[lang][k];
+  }
+}
+
+/* ================= RESET INDEX ================= */
+function resetIndexToFirstEmpty() {
+  index = 0;
+  while(index < fields.length){
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if(el && el.value.trim()==="") break;
+    index++;
+  }
+}
+
+/* ================= AUTOFILL ================= */
+window.addEventListener("DOMContentLoaded", async () => {
+  setLabels();
+  try {
+    const res = await fetch('{{ url_for("api_autofill") }}?type=deposit', {credentials:'same-origin'});
+    const json = await res.json();
+    if(json.status==="ok"){
+      for(let k in json.data){
+        const el = document.querySelector(`[name="${k}"]`);
+        if(el) el.value = json.data[k];
+      }
+    }
+  }catch(e){console.error(e);}
+  resetIndexToFirstEmpty();
+});
+
+/* ================= SERVER TTS ================= */
+async function speak(text){
+  const res = await fetch("/tts",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text, lang})
+  });
+  const data = await res.json();
+  if(data.audio){
+    await new Promise(resolve=>{
+      const audio = new Audio(data.audio);
+      audio.onended = resolve;
+      audio.play();
+    });
+  }
+}
+
+/* ================= LISTEN ================= */
+function listen(){
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e=>chunks.push(e.data);
+    recorder.start();
+    setTimeout(()=>recorder.stop(),6000);
+    recorder.onstop = processAudio;
+  });
+}
+
+/* ================= WORD TO NUMBER CONVERSION ================= */
+const WORD_NUM = {
+  hi: {
+    "एक":1,"दो":2,"तीन":3,"चार":4,"पाँच":5,"छह":6,"सात":7,"आठ":8,"नौ":9,"दस":10,
+    "ग्यारह":11,"बारह":12,"तेरह":13,"चौदह":14,"पंद्रह":15
+  },
+  kn: {
+    "ಒಂದು":1,"ಎರಡು":2,"ಮೂರು":3,"ನಾಲ್ಕು":4,"ಐದು":5,"ಆರು":6,"ಏಳು":7,"ಎಂಟು":8,"ಒಂಬತ್ತು":9,"ಹತ್ತು":10,
+    "ಹನ್ನೊಂದು":11,"ಹನ್ನೆರಡು":12,"ಹದಿಮೂರು":13,"ಹದಿನಾಲ್ಕು":14,"ಹದಿನೈದು":15
+  }
+};
+
+function spokenToNumber(text){
+  text = text.trim().toLowerCase();
+  // Direct digits
+  let num = text.replace(/[^0-9]/g,"");
+  if(num) return num;
+
+  // Hindi/Kannada words
+  if(WORD_NUM[lang] && WORD_NUM[lang][text]!==undefined){
+    return WORD_NUM[lang][text];
+  }
+
+  return ""; // fallback
+}
+
+/* ================= PROCESS AUDIO ================= */
+async function processAudio(){
+  const blob = new Blob(chunks,{type:"audio/webm"});
+  const fd = new FormData();
+  fd.append("audio", blob);
+  fd.append("lang", lang);
+
+  const r = await fetch("/stt",{method:"POST", body:fd});
+  const d = await r.json();
+
+  let text = (d.text || "").trim();
+  const fieldName = fields[index];
+  const el = document.querySelector(`[name="${fieldName}"]`);
+
+  if(!el || !text){
+    index++;
+    askNext();
+    return;
+  }
+
+  /* ================= NUMBER FIX ================= */
+  if(el.type==="number"){
+    el.value = spokenToNumber(text);
+  }
+  /* ================= SELECT FIX ================= */
+  else if(el.tagName==="SELECT"){
+    const spoken = text.toLowerCase();
+    if(spoken.includes("fixed")) el.value="FD";
+    else if(spoken.includes("recurring")) el.value="RD";
+  }
+  else el.value = text;
+
+  index++;
+  askNext();
+}
+
+/* ================= ASK EMPTY ================= */
+async function askNext(){
+  while(index<fields.length){
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if(el && el.value.trim()===""){
+      await speak(Q[fields[index]][lang]);
+      listen();
+      return;
+    }
+    index++;
+  }
+
+  await speak(
+    lang==="hi"?"डिपॉजिट जमा किया जा रहा है":
+    lang==="kn"?"ಠೇವಣಿ ಸಲ್ಲಿಸಲಾಗುತ್ತಿದೆ":
+    "Submitting deposit application"
+  );
+  document.getElementById("autoSubmit").click();
+}
+
+/* ================= START ================= */
+document.addEventListener("click",()=>{if(index<fields.length) askNext();},{once:true});
+
+</script>
+
+{% endblock %}

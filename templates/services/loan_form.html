@@ -1,0 +1,238 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div class="max-w-lg mx-auto bg-white/90 text-black p-6 rounded-2xl shadow-lg border">
+  <h2 class="text-2xl font-bold text-center text-indigo-700 mb-4" id="label-title">
+    Loan Application Form
+  </h2>
+
+  <form method="post" id="loanForm" class="space-y-4">
+
+    <div>
+      <label class="block font-semibold text-center" id="label-full_name">Full Name</label>
+      <input name="full_name" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-center" id="label-loan_type">Loan Type</label>
+      <select name="loan_type" class="w-full border rounded p-2 text-center">
+        <option value="">-- Select --</option>
+        <option value="Personal">Personal</option>
+        <option value="Home">Home</option>
+        <option value="Education">Education</option>
+        <option value="Vehicle">Vehicle</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block font-semibold text-center" id="label-loan_amount">Loan Amount (₹)</label>
+      <input type="number" name="loan_amount" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-center" id="label-tenure">Tenure (Months)</label>
+      <input type="number" name="tenure" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-center" id="label-employment_status">Employment Status</label>
+      <input name="employment_status" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <div>
+      <label class="block font-semibold text-center" id="label-income">Annual Income (₹)</label>
+      <input type="number" name="income" class="w-full border rounded p-2 text-center">
+    </div>
+
+    <button type="submit" class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg">
+      Apply for Loan
+    </button>
+
+    <a
+  href="{{ url_for('dashboard') }}"
+  class="mt-2 block text-center w-full bg-blue-700 text-white py-2 rounded-lg hover:bg-blue-700 transition"
+  id="label-back"
+>
+  Back to Dashboard
+</a>
+    <!-- hidden auto submit -->
+    <button type="submit" id="autoSubmit" class="hidden"></button>
+  </form>
+</div>
+
+<script>
+/* ================= BASIC ================= */
+let lang = localStorage.getItem("lang") || "en";
+let recorder, chunks = [];
+let index = 0;
+
+/* ================= FIELD ORDER ================= */
+const fields = [
+  "full_name",
+  "loan_type",
+  "loan_amount",
+  "tenure",
+  "employment_status",
+  "income"
+];
+
+/* ================= QUESTIONS ================= */
+const Q = {
+  full_name:{en:"Please say your full name",hi:"कृपया अपना पूरा नाम बताएं",kn:"ದಯವಿಟ್ಟು ನಿಮ್ಮ ಸಂಪೂರ್ಣ ಹೆಸರು ಹೇಳಿ"},
+  loan_type:{en:"Please say loan type",hi:"कृपया ऋण का प्रकार बताएं",kn:"ದಯವಿಟ್ಟು ಸಾಲದ ಪ್ರಕಾರ ಹೇಳಿ"},
+  loan_amount:{en:"Please say loan amount",hi:"कृपया ऋण राशि बताएं",kn:"ದಯವಿಟ್ಟು ಸಾಲದ ಮೊತ್ತ ಹೇಳಿ"},
+  tenure:{en:"Please say tenure in months",hi:"कृपया अवधि महीनों में बताएं",kn:"ದಯವಿಟ್ಟು ಅವಧಿಯನ್ನು ತಿಂಗಳಲ್ಲಿ ಹೇಳಿ"},
+  employment_status:{en:"Please say employment status",hi:"कृपया रोजगार की स्थिति बताएं",kn:"ದಯವಿಟ್ಟು ಉದ್ಯೋಗ ಸ್ಥಿತಿ ಹೇಳಿ"},
+  income:{en:"Please say annual income",hi:"कृपया वार्षिक आय बताएं",kn:"ದಯವಿಟ್ಟು ವಾರ್ಷಿಕ ಆದಾಯ ಹೇಳಿ"}
+};
+
+/* ================= LABELS ================= */
+function setLabels() {
+  const L = {
+    en:{title:"Loan Application Form",full_name:"Full Name",loan_type:"Loan Type",loan_amount:"Loan Amount (₹)",tenure:"Tenure (Months)",employment_status:"Employment Status",income:"Annual Income (₹)"},
+    hi:{title:"ऋण आवेदन फॉर्म",full_name:"पूरा नाम",loan_type:"ऋण का प्रकार",loan_amount:"ऋण राशि (₹)",tenure:"अवधि (महीने)",employment_status:"रोजगार की स्थिति",income:"वार्षिक आय (₹)"},
+    kn:{title:"ಸಾಲ ಅರ್ಜಿ ಫಾರ್ಮ್",full_name:"ಪೂರ್ಣ ಹೆಸರು",loan_type:"ಸಾಲದ ಪ್ರಕಾರ",loan_amount:"ಸಾಲದ ಮೊತ್ತ (₹)",tenure:"ಅವಧಿ (ತಿಂಗಳು)",employment_status:"ಉದ್ಯೋಗ ಸ್ಥಿತಿ",income:"ವಾರ್ಷಿಕ ಆದಾಯ (₹)"}
+  };
+  for (let k in L[lang]) {
+    const el = document.getElementById("label-"+k);
+    if (el) el.innerText = L[lang][k];
+  }
+}
+
+/* ================= RESET INDEX ================= */
+function resetIndexToFirstEmpty() {
+  index = 0;
+  while (index < fields.length) {
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if (el && el.value.trim() === "") break;
+    index++;
+  }
+}
+
+/* ================= AUTOFILL ================= */
+window.addEventListener("DOMContentLoaded", async () => {
+  setLabels();
+  const res = await fetch('{{ url_for("api_autofill") }}?type=loan');
+  const json = await res.json();
+  if (json.status === "ok") {
+    for (let k in json.data) {
+      const el = document.querySelector(`[name="${k}"]`);
+      if (el) el.value = json.data[k];
+    }
+  }
+  resetIndexToFirstEmpty();
+});
+
+/* ================= SERVER TTS (SAME AS TRANSACTION) ================= */
+async function speak(text) {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text, lang })
+  });
+  const data = await res.json();
+  if (data.audio) {
+    await new Promise(resolve => {
+      const audio = new Audio(data.audio);
+      audio.onended = resolve;
+      audio.play();
+    });
+  }
+}
+
+/* ================= LISTEN ================= */
+function listen() {
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(() => recorder.stop(), 6000);
+    recorder.onstop = processAudio;
+  });
+}
+
+/* ================= PROCESS AUDIO ================= */
+async function processAudio() {
+  const blob = new Blob(chunks,{ type:"audio/webm" });
+  const fd = new FormData();
+  fd.append("audio", blob);
+  fd.append("lang", lang);
+
+  const r = await fetch("/stt",{ method:"POST", body:fd });
+  const d = await r.json();
+
+  let text = (d.text || "").trim();
+
+  const fieldName = fields[index];
+  const el = document.querySelector(`[name="${fieldName}"]`);
+
+  if (!el) {
+  index++;
+  askNext();
+  return;
+}
+
+// if no text was recognized, repeat the same question
+if (!text) {
+  await speak(
+    lang==="hi"?"मुझे ठीक से सुनाई नहीं दिया। कृपया फिर से कहें":
+    lang==="kn"?"ನನಗೆ ಸ್ಪಷ್ಟವಾಗಿ ಕೇಳಿಸಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಹೇಳಿ":
+    "I did not hear clearly. Please repeat"
+  );
+  listen();
+  return; // do NOT increment index
+}
+
+
+  /* ================= NUMBER FIX ================= */
+  if (el.type === "number") {
+    // remove commas, currency symbols, spaces
+    text = text.replace(/[^0-9]/g, "");
+  }
+
+  /* ================= SELECT FIX ================= */
+  if (el.tagName === "SELECT") {
+    const spoken = text.toLowerCase();
+    for (let opt of el.options) {
+      if (opt.value.toLowerCase() === spoken) {
+        el.value = opt.value;
+        break;
+      }
+    }
+  } 
+  else {
+    el.value = text;
+  }
+
+  index++;
+  askNext();
+}
+
+/* ================= ASK ONLY EMPTY ================= */
+async function askNext() {
+  while (index < fields.length) {
+    const el = document.querySelector(`[name="${fields[index]}"]`);
+    if (el && el.value.trim() === "") {
+      await speak(Q[fields[index]][lang]);
+      listen();
+      return;
+    }
+    index++;
+  }
+
+  await speak(
+    lang==="hi"?"ऋण आवेदन जमा किया जा रहा है":
+    lang==="kn"?"ಸಾಲ ಅರ್ಜಿ ಸಲ್ಲಿಸಲಾಗುತ್ತಿದೆ":
+    "Submitting loan application"
+  );
+  document.getElementById("autoSubmit").click();
+}
+
+/* ================= START ================= */
+document.addEventListener("click", () => {
+  if (index < fields.length) askNext();
+}, { once:true });
+
+</script>
+{% endblock %}

@@ -1,0 +1,350 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<div
+  id="page"
+  data-has-receipt="{{ 'true' if transaction_info else 'false' }}"
+  class="max-w-lg mx-auto bg-white/90 text-black p-6 rounded-2xl shadow-lg mt-10"
+>
+  <h2 class="text-2xl font-bold text-center text-purple-700 mb-4" id="label-title">
+    Transactions
+  </h2>
+
+  <!-- ================= FORM ================= -->
+  <form id="transactionForm" class="space-y-4" onsubmit="event.preventDefault(); submitTransaction();">
+
+    <!-- Sender -->
+    <div>
+      <label class="block font-medium text-center" id="label-sender">
+        Sender Account (Last 4 digits)
+      </label>
+      <input type="text" id="sender_last4"
+             class="w-full border rounded-lg px-3 py-2 text-center"
+             value="{{ sender_account.account_number[-4:] }}"
+             readonly>
+    </div>
+
+    <!-- Receiver -->
+    <div>
+      <label class="block font-medium text-center" id="label-receiver">
+        Receiver Account (Last 4 digits)
+      </label>
+      <input type="text" id="receiverLast4Field"
+             class="w-full border rounded-lg px-3 py-2 text-center"
+             maxlength="4">
+      <p id="receiver_name_display" class="text-sm mt-1 text-center"></p>
+    </div>
+
+    <!-- Amount -->
+    <div>
+      <label class="block font-medium text-center" id="label-amount">Amount</label>
+      <input type="number" id="amountField"
+             class="w-full border rounded-lg px-3 py-2 text-center"
+             min="1">
+    </div>
+
+    <!-- Transfer -->
+    <button type="submit" id="submitBtn"
+      class="w-full bg-blue-700 text-white py-2 rounded-lg font-semibold" id="label-submit">
+      Transfer
+    </button>
+
+    <!-- Back -->
+    <a href="{{ url_for('dashboard') }}"
+      class="block text-center text-white mt-2 bg-blue-700 py-2 rounded-lg font-semibold" id="label-back">
+      Back to Dashboard
+    </a>
+
+    <!-- Hidden auto-submit for voice flow -->
+    <button type="submit" id="autoSubmit" class="hidden"></button>
+  </form>
+
+  <!-- ================= RESULT ================= -->
+  <div id="result" class="mt-4 text-center text-sm"></div>
+
+  <!-- ================= RECEIPT ================= -->
+  {% if transaction_info %}
+  <div
+    id="receiptSection"
+    class="mt-6 p-4 border rounded-lg bg-white text-black"
+  >
+    <h3 class="text-lg font-bold mb-4 text-center" id="label-receipt">
+      Transaction Receipt
+    </h3>
+    <p><strong id="label-receiptno">Receipt No:</strong> {{ transaction_info.receipt_number }}</p>
+    <p><strong id="label-name">Name:</strong> {{ transaction_info.name }}</p>
+    <p><strong id="label-senderacc">Sender Account:</strong> {{ transaction_info.sender_account }}</p>
+    <p><strong id="label-receiveracc">Receiver Account:</strong> {{ transaction_info.receiver_account }}</p>
+    <p><strong id="label-amounttrans">Amount:</strong> ₹{{ transaction_info.amount }}</p>
+    <p><strong id="label-balanceafter">Balance After:</strong> ₹{{ transaction_info.balance_after }}</p>
+    <p><strong id="label-datetime">Date & Time:</strong> {{ transaction_info.datetime }}</p>
+  </div>
+
+  <button
+    onclick="generatePDF()"
+    class="mt-4 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
+    id="label-print"
+  >
+    Print Receipt
+  </button>
+  {% endif %}
+</div>
+
+<!-- ================= jsPDF ================= -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script>
+async function generatePDF() {
+  const { jsPDF } = window.jspdf;
+  const receipt = document.getElementById("receiptSection");
+  const canvas = await html2canvas(receipt, { scale: 2 });
+  const imgData = canvas.toDataURL("image/png");
+
+  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imgProps = pdf.getImageProperties(imgData);
+  const pdfWidth = pageWidth - 40;
+  const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+  pdf.addImage(imgData, "PNG", 20, 20, pdfWidth, pdfHeight);
+  pdf.save("transaction_receipt.pdf");
+}
+</script>
+
+<!-- ================= VOICE + MULTI-LANGUAGE + GOOGLE TRANSLATE ================= -->
+<script>
+const HAS_RECEIPT = document.getElementById("page").dataset.hasReceipt === "true";
+const DASHBOARD_URL = "{{ url_for('dashboard') }}";
+
+let selectedLang = localStorage.getItem("lang") || "en";
+let stage = "receiver";
+let voiceStarted = false;
+let receiverValid = false;
+
+/* ===== LABELS ===== */
+const labels = {
+  "en": {
+    "title": "Transactions",
+    "sender": "Sender Account (Last 4 digits)",
+    "receiver": "Receiver Account (Last 4 digits)",
+    "amount": "Amount",
+    "submit": "Transfer",
+    "back": "Back to Dashboard",
+    "processing": "Processing transaction",
+    "accountNotFound": "Account not found. Please say correct account number",
+    "receiverBelongs": "This account belongs to "
+  },
+  "hi": {
+    "title": "लेनदेन",
+    "sender": "प्रेषक खाता (अंतिम 4 अंक)",
+    "receiver": "प्राप्तकर्ता खाता (अंतिम 4 अंक)",
+    "amount": "राशि",
+    "submit": "स्थानांतरण करें",
+    "back": "डैशबोर्ड पर वापस जाएँ",
+    "processing": "लेनदेन किया जा रहा है",
+    "accountNotFound": "खाता नहीं मिला, सही खाता संख्या बताएं",
+    "receiverBelongs": "यह खाता "
+  },
+  "kn": {
+    "title": "ವಹಿವಾಟು",
+    "sender": "ಪ್ರೋದ್ಯೋಗ ಖಾತೆ (ಕೊನೆಯ 4 ಅಂಕೆಗಳು)",
+    "receiver": "ಸ್ವೀಕರಿಸುವವರ ಖಾತೆ (ಕೊನೆಯ 4 ಅಂಕೆಗಳು)",
+    "amount": "ಮೊತ್ತ",
+    "submit": "ಸ್ಥಾಂತರಿಸಿ",
+    "back": "ಡ್ಯಾಶ್‌ಬೋರ್ಡ್‌ಗೆ ಹಿಂದಿರುಗಿ",
+    "processing": "ವಹಿವಾಟು ನಡೆಯುತ್ತಿದೆ",
+    "accountNotFound": "ಖಾತೆ ಕಂಡುಬಂದಿಲ್ಲ, ಸರಿಯಾದ ಸಂಖ್ಯೆಯನ್ನು ಹೇಳಿ",
+    "receiverBelongs": "ಈ ಖಾತೆ "
+  }
+};
+
+/* ===== SET LABELS ===== */
+function setLabels() {
+  for (const id in labels[selectedLang]) {
+    const el = document.getElementById("label-" + id);
+    if (el) el.innerText = labels[selectedLang][id];
+  }
+}
+setLabels();
+
+/* ===== VOICE SPEAK ===== */
+async function speak(text) {
+  const res = await fetch("/tts", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text, lang: selectedLang })
+  });
+  const data = await res.json();
+  if (data.audio) {
+    await new Promise(resolve => {
+      const audio = new Audio(data.audio);
+      audio.onended = resolve;
+      audio.play();
+    });
+  }
+}
+
+/* ===== LISTEN ===== */
+let recorder, chunks = [];
+const fields = ["receiverLast4Field", "amountField"];
+const Q = {
+  receiverLast4Field: {
+    en: "Please say receiver account last four digits",
+    hi: "कृपया प्राप्तकर्ता खाते के अंतिम चार अंक बताएं",
+    kn: "ದಯವಿಟ್ಟು ಸ್ವೀಕರಿಸುವವರ ಖಾತೆಯ ಕೊನೆಯ ನಾಲ್ಕು ಅಂಕಗಳನ್ನು ಹೇಳಿ"
+  },
+  amountField: {
+    en: "Please say transfer amount",
+    hi: "कृपया राशि बताएं",
+    kn: "ದಯವಿಟ್ಟು ವರ್ಗಾವಣೆ ಮೊತ್ತ ಹೇಳಿ"
+  }
+};
+let index = 0;
+
+function listen() {
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    chunks = [];
+    recorder.ondataavailable = e => chunks.push(e.data);
+    recorder.start();
+    setTimeout(() => recorder.stop(), 6000);
+    recorder.onstop = processAudio;
+  });
+}
+async function processAudio() {
+  const blob = new Blob(chunks, { type: "audio/webm" });
+  const fd = new FormData();
+  fd.append("audio", blob);
+  fd.append("lang", selectedLang);
+
+  const r = await fetch("/stt", { method: "POST", body: fd });
+  const d = await r.json();
+
+  let text = (d.text || "").replace(/\s/g, "");
+
+  const fieldId = fields[index];
+  const el = document.getElementById(fieldId);
+
+  /* ===== AMOUNT CLEANING ===== */
+  if (fieldId === "amountField") {
+    text = text.replace(/,/g, ""); // remove commas
+
+    // ❌ No amount spoken
+    if (!text || isNaN(text) || Number(text) <= 0) {
+      await speak(Q.amountField[selectedLang]);
+      listen();
+      return; // ⛔ DO NOT MOVE FORWARD
+    }
+  }
+
+  /* ===== SET VALUE ===== */
+  if (el && text) el.value = text;
+
+  /* ===== RECEIVER VALIDATION ===== */
+  if (fieldId === "receiverLast4Field") {
+    const valid = await fetchReceiverName(true);
+    if (!valid) {
+      index = 0;
+      return; // ⛔ stop flow
+    }
+  }
+
+  // ✅ Only here we move forward
+  index++;
+  askNext();
+}
+
+async function askNext() {
+  if (index < fields.length) {
+    await speak(Q[fields[index]][selectedLang]);
+    listen();
+  } else {
+    await speak(labels[selectedLang].processing);
+    document.getElementById("autoSubmit").click();
+  }
+}
+
+/* ===== FETCH RECEIVER NAME ===== */
+async function fetchReceiverName(voice = false) {
+  const last4 = document.getElementById("receiverLast4Field").value.trim();
+  const display = document.getElementById("receiver_name_display");
+
+  if (last4.length !== 4) {
+    display.textContent = "";
+    receiverValid = false;
+    return false;
+  }
+
+  try {
+    const res = await fetch("/services/get_receiver_name", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ receiver_last4: last4 })
+    });
+    const data = await res.json();
+
+    if (data.status === "success") {
+      receiverValid = true;
+      display.textContent = labels[selectedLang].receiverBelongs + data.name;
+      display.className = "text-green-600";
+
+      if (voice) await speak(display.textContent);
+      return true;
+    } else {
+      receiverValid = false;
+      display.textContent = labels[selectedLang].accountNotFound;
+      display.className = "text-red-600";
+      if (voice) await speak(display.textContent);
+      return false;
+    }
+  } catch {
+    receiverValid = false;
+    return false;
+  }
+}
+
+/* ===== INIT VOICE ===== */
+document.addEventListener("click", () => {
+  if (!voiceStarted && !HAS_RECEIPT) {
+    voiceStarted = true;
+    askNext();
+  }
+}, { once: true });
+
+/* ===== TRANSACTION SUBMIT ===== */
+async function submitTransaction() {
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  btn.innerText = labels[selectedLang].processing;
+
+  const res = await fetch("/services/transaction", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      sender_last4: document.getElementById("sender_last4").value,
+      receiver_last4: document.getElementById("receiverLast4Field").value,
+      amount: document.getElementById("amountField").value
+    })
+  });
+
+  const data = await res.json();
+  document.getElementById("result").innerHTML = data.message;
+
+  if (data.status === "success") {
+    setTimeout(() => { window.location.href = DASHBOARD_URL; }, 2000);
+  } else {
+    btn.disabled = false;
+    btn.innerText = labels[selectedLang].submit;
+  }
+}
+
+/* ===== GOOGLE TRANSLATE SUPPORT ===== */
+function initGoogleTranslate() {
+  new google.translate.TranslateElement({
+    pageLanguage: 'en',
+    layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+  }, 'google_translate_element');
+}
+</script>
+
+{% endblock %}
